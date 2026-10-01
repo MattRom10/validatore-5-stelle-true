@@ -15,10 +15,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/api/status', (req, res) => {
     res.json({ message: "Server del validatore operativo!", status: "OK" });
 });
-
 // Qui importeremo le rotte (Routes) in stile MVC
-// const apiRoutes = require('./routes/apiRoutes');
-// app.use('/api', apiRoutes);
+const apiRoutes = require('./routes/apiRoutes');
+app.use('/api', apiRoutes);
 
 // Avvio del server
 app.listen(PORT, () => {
