@@ -1,4 +1,99 @@
 const path = require('path');
+const xlsx = require('xlsx');
+const fs = require('fs');
+
+// --- ANALISI 1 STELLA (Formati Statici e Non Strutturati) ---
+const analizzaFormatoNonStrutturato = (mimeType, extension, originalName) => {
+    let diagnosi = {
+        file: originalName,
+        stelleAssegnate: 1,
+        livelloMaturita: "1 Stella - Open License (Dato non strutturato)",
+        dettagli: []
+    };
+
+    const coerenzaMime = {
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.txt': 'text/plain',
+        '.doc': 'application/msword',
+        // Aggiungiamo i mime di Excel nel caso in cui arrivino dal fallback
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+
+    const mimeAtteso = coerenzaMime[extension];
+
+    if (mimeAtteso && mimeType.includes(mimeAtteso.split('/')[0])) {
+        diagnosi.dettagli.push("Verifica di sicurezza: L'estensione e la firma MIME coincidono.");
+        diagnosi.dettagli.push("Il dato è statico o non presenta una matrice tabellare valida.");
+    } else {
+        // LIVELLO 0: File falso, manomesso o illeggibile
+        diagnosi.stelleAssegnate = 0;
+        diagnosi.livelloMaturita = "0 Stelle - Non Classificabile (Spoofing o Corruzione)";
+        diagnosi.dettagli.push(`ALLARME: Il file dichiara l'estensione ${extension} ma la vera firma è ${mimeType}.`);
+    }
+
+    return diagnosi;
+};
+
+// --- ANALISI 2 STELLE (Formati Proprietari Strutturati) ---
+// Ora accetta anche mimeType e extension per poterli passare al fallback
+const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension) => {
+    let diagnosi = {
+        file: originalName,
+        stelleAssegnate: 0,
+        livelloMaturita: "",
+        dettagli: []
+    };
+
+    try {
+        const workbook = xlsx.readFile(filePath);
+        const sheetNames = workbook.SheetNames;
+        
+        // Controllo profondo 1: Il file ha dei fogli?
+        if (sheetNames.length === 0) {
+            throw new Error("Il file Excel è vuoto (nessun foglio trovato).");
+        }
+
+        const firstSheet = workbook.Sheets[sheetNames[0]];
+        
+        // Controllo profondo 2: Il primo foglio ha dei dati? (!ref indica il range di celle piene)
+        if (!firstSheet['!ref']) {
+            throw new Error("Il foglio di calcolo principale non contiene dati.");
+        }
+
+        const range = xlsx.utils.decode_range(firstSheet['!ref']);
+        const rowCount = range.e.r - range.s.r + 1;
+        const colCount = range.e.c - range.s.c + 1;
+
+        // Controllo profondo 3: È davvero strutturato? (Es. non basta 1 riga e 1 colonna)
+        if (rowCount < 2 || colCount < 2) {
+            throw new Error("Dati insufficienti per formare una struttura tabellare (minimo 2 righe e 2 colonne).");
+        }
+
+        diagnosi.stelleAssegnate = 2;
+        diagnosi.livelloMaturita = "2 Stelle - Machine Readable (Formato proprietario)";
+        diagnosi.dettagli.push("Verifica superata: Foglio di calcolo valido e integro.");
+        diagnosi.dettagli.push(`Rilevata matrice strutturata: ${rowCount} righe e ${colCount} colonne.`);
+        diagnosi.dettagli.push("Il formato è proprietario (rischio vendor lock-in).");
+        
+        return diagnosi;
+        
+    } catch (error) {
+        // FALLBACK: Il file Excel non è valido o non è strutturato. Passiamo al livello 1.
+        console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
+        
+        // La funzione 1 stella valuterà se dare 1 stella (es. è un file chiuso ma leggibile) o 0 stelle
+        let diagnosiFallback = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
+        
+        // Inseriamo il motivo del declassamento in cima ai dettagli
+        diagnosiFallback.dettagli.unshift(`Declassamento da 2 stelle: ${error.message}`);
+        
+        return diagnosiFallback;
+    }
+};
 
 const analyzeDataset = (req, res) => {
     if(!req.file){
@@ -36,18 +131,11 @@ const analyzeDataset = (req, res) => {
 
 
     if(estensioni1Stella.includes(extension)){
-        diagnosi.stelleAssegnate = 1;
-        diagnosi.livelloMaturita = "1 Stella - Open License (Dato non strutturato)";
-        diagnosi.dettagli.push("I dati sono leggibili dall'uomo ma richiedono trascrizione manuale o OCR per l'elaborazione.");
-        return res.json(diagnosi);
+        risultatoValidazione = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
     }
 
     if (estensioni2Stelle.includes(extension)) {
-        diagnosi.stelleAssegnate = 2;
-        diagnosi.livelloMaturita = "2 Stelle - Machine Readable (Formato proprietario)";
-        diagnosi.dettagli.push("Il dato è strutturato in righe e colonne ed è leggibile da una macchina.");
-        diagnosi.dettagli.push("Il formato dipende da software commerciale proprietario (rischio vendor lock-in).");
-        return res.json(diagnosi);
+        risultatoValidazione = analizzaFormatoProprietario(filePath, originalName, mimeType, extension);
     }
 
     if (estensioni3Stelle.includes(extension)) {
