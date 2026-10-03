@@ -1,6 +1,7 @@
 const path = require('path');
 const xlsx = require('xlsx');
 const { XMLParser } = require('fast-xml-parser');
+const os = require('os');
 const fs = require('fs');
 
 // --- ANALISI 1 STELLA (Formati Statici e Non Strutturati) ---
@@ -52,6 +53,45 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
     };
 
     try {
+        const stats = fs.statSync(filePath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+
+        // Calcolo risorse dinamico per la sicurezza dell'Heap V8
+        const ramLiberaMB = os.freemem() / (1024 * 1024);
+        const ramTotaleMB = os.totalmem() / (1024 * 1024);
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 250);
+        
+        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
+
+        if (isBigData) {
+            diagnosi.dettagli.push(`ATTENZIONE: File di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi ottimizzata per preservare la RAM (${sogliaSicurezzaMB.toFixed(0)} MB max allocabili).`);
+
+            // Lettura a basso livello dei primi 8 byte per cercare i Magic Numbers di Excel
+            const fd = fs.openSync(filePath, 'r');
+            const buffer = Buffer.alloc(8);
+            fs.readSync(fd, buffer, 0, 8, 0);
+            fs.closeSync(fd);
+
+            // Convertiamo il buffer in una stringa esadecimale maiuscola
+            const hexSignature = buffer.toString('hex').toUpperCase();
+
+            // .xlsx signature: 504B0304 (Archivio ZIP)
+            // .xls signature: D0CF11E0 (Microsoft OLE2)
+            const isXlsx = hexSignature.startsWith('504B0304');
+            const isXls = hexSignature.startsWith('D0CF11E0');
+
+            if (!isXlsx && !isXls) {
+                throw new Error("Il file di grandi dimensioni non presenta l'intestazione binaria (Magic Number) tipica dei formati Excel validi.");
+            }
+
+            diagnosi.stelleAssegnate = 2;
+            diagnosi.livelloMaturita = "2 Stelle - Machine Readable (Proprietario Big Data)";
+            diagnosi.dettagli.push("Verifica parziale superata: Intestazione binaria del formato proprietario identificata correttamente.");
+            diagnosi.dettagli.push("Il formato è proprietario (rischio vendor lock-in).");
+            return diagnosi;
+        }
+
+        // Se il file rientra nei limiti di sicurezza, eseguiamo l'analisi profonda classica
         const workbook = xlsx.readFile(filePath);
         const sheetNames = workbook.SheetNames;
         
@@ -85,13 +125,9 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
         return diagnosi;
         
     } catch (error) {
-        // FALLBACK: Il file Excel non è valido o non è strutturato. Passiamo al livello 1.
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
         
-        // La funzione 1 stella valuterà se dare 1 stella (es. è un file chiuso ma leggibile) o 0 stelle
         let diagnosiFallback = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
-        
-        // Inseriamo il motivo del declassamento in cima ai dettagli
         diagnosiFallback.dettagli.unshift(`Declassamento da 2 stelle: ${error.message}`);
         
         return diagnosiFallback;
@@ -108,13 +144,40 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     };
 
     try {
-        // Leggiamo la grandezza del file per evitare il collasso della RAM
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
 
+        // Calcolo risorse dinamico per la sicurezza dell'Heap V8
+        const ramLiberaMB = os.freemem() / (1024 * 1024);
+        const ramTotaleMB = os.totalmem() / (1024 * 1024);
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 250);
+        
+        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
+
+        // Funzione per leggere un "Chunk" iniziale in modo sicuro, senza saturare la RAM.
+        // Utilissima per validare la struttura base di file enormi.
+        const leggiChunk = (bytesToRead) => {
+            const fd = fs.openSync(filePath, 'r');
+            // Creiamo un buffer grande al massimo quanto il file o quanto richiesto
+            const allocSize = Math.min(bytesToRead, stats.size);
+            const buffer = Buffer.alloc(allocSize);
+            const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
+            fs.closeSync(fd);
+            return buffer.toString('utf8', 0, bytesRead);
+        };
+
+        // Se il file è enorme, aggiungiamo una nota ai dettagli
+        if (isBigData) {
+            diagnosi.dettagli.push(`ATTENZIONE: File di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi ottimizzata a blocchi (Chunking) per preservare la RAM (${sogliaSicurezzaMB.toFixed(0)} MB max allocabili).`);
+        }
+
+        // --- CONTROLLO CSV ---
         if (extension === '.csv') {
-            const fileContent = fs.readFileSync(filePath, 'utf8');
-            const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
+            // Se è Big Data, leggiamo i primi 5MB per cercare intestazioni e link
+            // Se è piccolo, lo leggiamo tutto
+            const contentToAnalyze = isBigData ? leggiChunk(5 * 1024 * 1024) : fs.readFileSync(filePath, 'utf8');
+            
+            const lines = contentToAnalyze.split('\n').filter(line => line.trim().length > 0);
             
             if (lines.length < 2) {
                 throw new Error("Il file CSV non contiene abbastanza righe per formare una matrice dati.");
@@ -128,15 +191,11 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
                 throw new Error("Nessun delimitatore valido (, o ;) trovato. Il file manca di struttura tabellare.");
             }
 
-            // --- CONTROLLO CATALOGHI (AGGIORNATO) ---
-            // 1. Cerca formati non strutturati anche SENZA il punto (es. "versione pdf", "scansione tiff")
             const regexFormatiChiusi = /\b(pdf|jpe?g|png|tiff|doc|docx|txt)\b/i;
-            
-            // 2. Cerca visualizzatori web, aggiungendo "item.jsp" (tipico della Puglia Digital Library)
-            const regexVetrina = /(opac|viewer|showdocument|dettaglio_documento|handle|gallery|item\.jsp)/i;
+            const regexPagineWeb = /https?:\/\/[^\s,;]+(\.(jsp|php|aspx?|html?)\b|\?(id|record|item|doc)=\d+)/i;
 
-            if (regexFormatiChiusi.test(fileContent) || regexVetrina.test(fileContent)) {
-                throw new Error("Il CSV funge da 'vetrina' verso documenti non strutturati (es. PDF, TIFF) o pagine di visualizzazione web. I dati reali puntati sono a 1 stella.");
+            if (regexFormatiChiusi.test(contentToAnalyze) || regexPagineWeb.test(contentToAnalyze)) {
+                throw new Error("Il CSV funge da 'vetrina' verso documenti non strutturati o pagine web HTML. I dati reali puntati sono a 1 stella.");
             }
 
             diagnosi.stelleAssegnate = 3;
@@ -145,17 +204,40 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
             return diagnosi;
         }
 
+        // --- CONTROLLO JSON ---
         if (extension === '.json') {
-            // CONTROLLO DI SICUREZZA PER FILE ENORMI (Evita il blocco del server)
-            if (fileSizeInMB > 15) {
+            if (isBigData) {
+                // Per il JSON gigante, oltre a controllare inizio/fine, leggiamo un blocco per assicurarci
+                // che non sia solo "spazzatura" impacchettata tra parentesi graffe.
+                const chunk = leggiChunk(500 * 1024); // Leggiamo il primo mezzo Megabyte
+                
+                // Verifichiamo che ci sia almeno una chiave-valore tipica del JSON
+                if (!chunk.includes('":') && !chunk.includes('": ')) {
+                     throw new Error("Il file JSON di grandi dimensioni non presenta una sintassi chiave-valore valida nei primi blocchi di dati.");
+                }
+
+                // Controllo dei confini per accertarsi che il file sia chiuso
+                const fd = fs.openSync(filePath, 'r');
+                const bufferFine = Buffer.alloc(10);
+                const posizioneFine = Math.max(0, stats.size - 10);
+                fs.readSync(fd, bufferFine, 0, 10, posizioneFine);
+                fs.closeSync(fd);
+                const fine = bufferFine.toString('utf8').trim();
+
+                const isObject = chunk.trim().startsWith('{') && fine.endsWith('}');
+                const isArray = chunk.trim().startsWith('[') && fine.endsWith(']');
+
+                if (!isObject && !isArray) {
+                    throw new Error("Il file JSON di grandi dimensioni è corrotto: non inizia o non termina con parentesi valide.");
+                }
+
                 diagnosi.stelleAssegnate = 3;
-                diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON Enorme)";
-                diagnosi.dettagli.push(`Verifica leggera superata: Il file è troppo grande (${fileSizeInMB.toFixed(2)} MB) per un'analisi profonda sicura.`);
-                diagnosi.dettagli.push("Assegnazione fiduciaria della terza stella basata sul formato per prevenire il collasso della RAM del server (Denial of Service).");
+                diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON Big Data)";
+                diagnosi.dettagli.push("Verifica parziale superata: Struttura dei dati e confini di apertura/chiusura sintatticamente coerenti.");
                 return diagnosi;
             }
 
-            // Se il file è sotto i 15MB, facciamo l'analisi chirurgica classica
+            // Analisi classica profonda (file interi che non sforano l'Heap)
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const parsedData = JSON.parse(fileContent);
             if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0) {
@@ -167,7 +249,26 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
             return diagnosi;
         }
 
+        // --- CONTROLLO XML ---
         if (extension === '.xml') {
+            if (isBigData) {
+                // Per un XML enorme, leggiamo il primo blocco e verifichiamo la presenza di tag
+                const chunk = leggiChunk(500 * 1024); 
+                
+                // Un XML valido deve avere almeno un'apertura e chiusura di tag vicine (es. <tag></tag> o <tag/>)
+                const haTag = (chunk.includes('<') && chunk.includes('>')) || chunk.startsWith('<?xml');
+                
+                if (!haTag) {
+                    throw new Error("Il file XML di grandi dimensioni non presenta marcatori gerarchici validi all'inizio del file.");
+                }
+                
+                diagnosi.stelleAssegnate = 3;
+                diagnosi.livelloMaturita = "3 Stelle - Open Format (XML Big Data)";
+                diagnosi.dettagli.push("Verifica parziale superata: Marcatori e gerarchia XML di base identificati correttamente.");
+                return diagnosi;
+            }
+
+            // Analisi classica profonda per file interi
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const parser = new XMLParser();
             const parsedXML = parser.parse(fileContent);
