@@ -7,7 +7,7 @@ const storage = multer.diskStorage({
         cb(null, 'uploads/'); // Salva nella cartella uploads
     },
     filename: (req, file, cb) => {
-        // Aggiunge un timestamp per evitare nomi di file duplicati
+        // Aggiunto un timestamp per evitare nomi di file duplicati con un numero random tipo id univoco
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname));
     }
