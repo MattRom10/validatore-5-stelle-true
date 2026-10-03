@@ -4,7 +4,7 @@ const path = require('path');
 
 // Inizializzazione dell'app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Middleware globali
 app.use(cors()); // Permette le chiamate dal frontend
