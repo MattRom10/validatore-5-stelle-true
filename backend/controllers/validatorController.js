@@ -1,5 +1,6 @@
 const path = require('path');
 const xlsx = require('xlsx');
+const { XMLParser } = require('fast-xml-parser');
 const fs = require('fs');
 
 // --- ANALISI 1 STELLA (Formati Statici e Non Strutturati) ---
@@ -94,6 +95,89 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
         return diagnosiFallback;
     }
 };
+// --- ANALISI 3 STELLE (Formati Aperti Strutturati) --- Qua è impossibile andare al livello 2 quindi nel caso Il CSV in realtà è un formato testuale, passerà direttamente al livello 1
+
+const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
+    let diagnosi = {
+        file: originalName,
+        stelleAssegnate: 0,
+        livelloMaturita: "",
+        dettagli: []
+    };
+
+    try {
+        // Leggiamo solo i primi byte del file per non saturare la memoria con dataset enormi
+        const fileBuffer = fs.readFileSync(filePath);
+        const fileContent = fileBuffer.toString('utf8', 0, Math.min(fileBuffer.length, 5000));
+
+        if (extension === '.csv') {
+            const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
+            
+            // Un CSV valido deve avere almeno due righe (intestazione + dati)
+            if (lines.length < 2) {
+                throw new Error("Il file CSV non contiene abbastanza righe per formare una matrice dati.");
+            }
+
+            // Controlliamo che la prima riga abbia un delimitatore standard (, o ;)
+            const headerLine = lines[0];
+            const commaCount = (headerLine.match(/,/g) || []).length;
+            const semicolonCount = (headerLine.match(/;/g) || []).length;
+
+            if (commaCount === 0 && semicolonCount === 0) {
+                throw new Error("Nessun delimitatore valido (, o ;) trovato. Il file manca di struttura tabellare.");
+            }
+
+            diagnosi.stelleAssegnate = 3;
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
+            diagnosi.dettagli.push("Verifica superata: Rilevata matrice dati tabellare non proprietaria.");
+            diagnosi.dettagli.push(`Identificato delimitatore di colonna. L'estrazione dei dati non richiede software commerciale.`);
+            
+            return diagnosi;
+        }
+
+        if (extension === '.json') {
+            // Per il JSON, proviamo a farne il parsing
+            const parseData=JSON.parse(fileContent);
+            if (typeof parseData !== 'object' || parseData === null || Array.isArray(parseData) === false || Object.keys(parseData).length === 0) {
+                throw new Error("Il file JSON è sintatticamente valido, ma non contiene una struttura dati valida (E' vuoto o è privo di struttura).");
+            }
+            diagnosi.stelleAssegnate = 3;
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
+            diagnosi.dettagli.push("Verifica superata: Struttura JSON valida e sintatticamente corretta.");
+            
+            return diagnosi;
+        }
+
+        //Controllo per XML, che è un formato aperto ma può essere complesso da validare senza uno schema
+
+        if (extension === '.xml') {
+            const parser = new XMLParser();
+            const parsedXML = parser.parse(fileContent);
+            if(Object.keys(parsedXML).length === 0 || parsedXML === null || typeof parsedXML !== 'object' || Array.isArray(parsedXML)){
+                throw new Error("Il file XML risulta vuoto, non formattato correttamente o privo di nodi gerarchici.");
+            }
+            
+            diagnosi.stelleAssegnate = 3;
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
+            diagnosi.dettagli.push("Verifica superata: Struttura XML valida e sintatticamente corretta.");
+            return diagnosi;
+
+        }
+
+    } catch (error) {
+        // FALLBACK: Il formato dichiara di essere aperto, ma non è strutturato correttamente.
+        console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
+        
+        // Salta il livello 2 (non è proprietario) e va direttamente al controllo di 1 stella
+        let diagnosiFallback = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
+        
+        diagnosiFallback.dettagli.unshift(`Declassamento da 3 stelle: ${error.message}`);
+        
+        return diagnosiFallback;
+    }
+};
+
+
 
 const analyzeDataset = (req, res) => {
     if(!req.file){
