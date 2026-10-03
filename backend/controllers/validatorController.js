@@ -12,7 +12,8 @@ const analizzaFormatoNonStrutturato = (mimeType, extension, originalName) => {
         livelloMaturita: "1 Stella - Open License (Dato non strutturato)",
         dettagli: []
     };
-//Aggiunti tutti i formati che ci servono
+    
+    // Aggiunti tutti i formati che ci servono
     const coerenzaMime = {
         '.pdf': 'application/pdf',
         '.jpg': 'image/jpeg',
@@ -43,7 +44,6 @@ const analizzaFormatoNonStrutturato = (mimeType, extension, originalName) => {
 };
 
 // --- ANALISI 2 STELLE (Formati Proprietari Strutturati) ---
-// Ora accetta anche mimeType e extension per poterli passare al fallback
 const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
@@ -58,8 +58,9 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
 
         // Calcolo risorse dinamico per la sicurezza dell'Heap V8
         const ramLiberaMB = os.freemem() / (1024 * 1024);
-        const ramTotaleMB = os.totalmem() / (1024 * 1024);
-        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 250);
+        
+        // CORREZIONE HARD-CAP: Limite abbassato a 50MB per prevenire l'Out Of Memory di Node.js
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
         
         const isBigData = fileSizeInMB > sogliaSicurezzaMB;
 
@@ -133,8 +134,8 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
         return diagnosiFallback;
     }
 };
-// --- ANALISI 3 STELLE (Formati Aperti Strutturati) --- Qua è impossibile andare al livello 2 quindi nel caso Il CSV in realtà è un formato testuale, passerà direttamente al livello 1
 
+// --- ANALISI 3 STELLE (Formati Aperti Strutturati) ---
 const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
@@ -149,16 +150,15 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
 
         // Calcolo risorse dinamico per la sicurezza dell'Heap V8
         const ramLiberaMB = os.freemem() / (1024 * 1024);
-        const ramTotaleMB = os.totalmem() / (1024 * 1024);
-        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 250);
+        
+        // CORREZIONE HARD-CAP: Limite abbassato a 50MB per prevenire l'Out Of Memory di Node.js
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
         
         const isBigData = fileSizeInMB > sogliaSicurezzaMB;
 
         // Funzione per leggere un "Chunk" iniziale in modo sicuro, senza saturare la RAM.
-        // Utilissima per validare la struttura base di file enormi.
         const leggiChunk = (bytesToRead) => {
             const fd = fs.openSync(filePath, 'r');
-            // Creiamo un buffer grande al massimo quanto il file o quanto richiesto
             const allocSize = Math.min(bytesToRead, stats.size);
             const buffer = Buffer.alloc(allocSize);
             const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
@@ -166,15 +166,12 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
             return buffer.toString('utf8', 0, bytesRead);
         };
 
-        // Se il file è enorme, aggiungiamo una nota ai dettagli
         if (isBigData) {
             diagnosi.dettagli.push(`ATTENZIONE: File di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi ottimizzata a blocchi (Chunking) per preservare la RAM (${sogliaSicurezzaMB.toFixed(0)} MB max allocabili).`);
         }
 
         // --- CONTROLLO CSV ---
         if (extension === '.csv') {
-            // Se è Big Data, leggiamo i primi 5MB per cercare intestazioni e link
-            // Se è piccolo, lo leggiamo tutto
             const contentToAnalyze = isBigData ? leggiChunk(5 * 1024 * 1024) : fs.readFileSync(filePath, 'utf8');
             
             const lines = contentToAnalyze.split('\n').filter(line => line.trim().length > 0);
@@ -207,16 +204,12 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
         // --- CONTROLLO JSON ---
         if (extension === '.json') {
             if (isBigData) {
-                // Per il JSON gigante, oltre a controllare inizio/fine, leggiamo un blocco per assicurarci
-                // che non sia solo "spazzatura" impacchettata tra parentesi graffe.
-                const chunk = leggiChunk(500 * 1024); // Leggiamo il primo mezzo Megabyte
+                const chunk = leggiChunk(500 * 1024); 
                 
-                // Verifichiamo che ci sia almeno una chiave-valore tipica del JSON
                 if (!chunk.includes('":') && !chunk.includes('": ')) {
                      throw new Error("Il file JSON di grandi dimensioni non presenta una sintassi chiave-valore valida nei primi blocchi di dati.");
                 }
 
-                // Controllo dei confini per accertarsi che il file sia chiuso
                 const fd = fs.openSync(filePath, 'r');
                 const bufferFine = Buffer.alloc(10);
                 const posizioneFine = Math.max(0, stats.size - 10);
@@ -237,7 +230,6 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
                 return diagnosi;
             }
 
-            // Analisi classica profonda (file interi che non sforano l'Heap)
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const parsedData = JSON.parse(fileContent);
             if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0) {
@@ -252,10 +244,8 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
         // --- CONTROLLO XML ---
         if (extension === '.xml') {
             if (isBigData) {
-                // Per un XML enorme, leggiamo il primo blocco e verifichiamo la presenza di tag
                 const chunk = leggiChunk(500 * 1024); 
                 
-                // Un XML valido deve avere almeno un'apertura e chiusura di tag vicine (es. <tag></tag> o <tag/>)
                 const haTag = (chunk.includes('<') && chunk.includes('>')) || chunk.startsWith('<?xml');
                 
                 if (!haTag) {
@@ -268,7 +258,6 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
                 return diagnosi;
             }
 
-            // Analisi classica profonda per file interi
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const parser = new XMLParser();
             const parsedXML = parser.parse(fileContent);
@@ -291,8 +280,6 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     }
 };
 
-
-
 const analyzeDataset = (req, res) => {
     if(!req.file){
         return res.status(400).json({error:"Errore, non è stato inviato alcun file"});
@@ -303,10 +290,8 @@ const analyzeDataset = (req, res) => {
     const mimeType = req.file.mimetype;
     const fileSize = req.file.size;
     
-    // CORREZIONE 2: Dobbiamo prendere il percorso del file salvato da multer!
     const filePath = req.file.path; 
 
-    // Questa variabile conterrà la risposta finale generata dalle varie funzioni
     let risultatoValidazione;
 
     const estensioni1Stella = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'];
@@ -314,7 +299,7 @@ const analyzeDataset = (req, res) => {
     const estensioni3Stelle = ['.csv', '.json', '.xml'];
     const estensioniSemantiche = ['.rdf', '.ttl', '.n3', '.nt', '.jsonld'];
 
-    // CORREZIONE 3: Smistamento corretto a cascata
+    // Smistamento corretto a cascata
     if (estensioni3Stelle.includes(extension)) {
         risultatoValidazione = analizzaFormatoAperto(filePath, originalName, mimeType, extension);
     } 
@@ -333,8 +318,6 @@ const analyzeDataset = (req, res) => {
         };
     } 
     else {
-        // Formato non riconosciuto
-        // Eliminiamo comunque il file temporaneo prima di dare errore
         fs.unlink(filePath, () => {});
         return res.status(400).json({
             file: originalName,
@@ -344,18 +327,13 @@ const analyzeDataset = (req, res) => {
         });
     }
 
-    // Aggiungiamo i metadati finali alla diagnosi
     risultatoValidazione.dimensioneKB = (fileSize / 1024).toFixed(2);
     risultatoValidazione.mimeType = mimeType;
 
-    // Questa funzione elimina fisicamente il file da /uploads una volta finiti i nostri controlli. 
-    //Questo serve sia per motivi di sicurezza che per evitare di saturare lo spazio disco del server con file temporanei.
-    //Ma anche per un motivo di privacy: non vogliamo che i file caricati rimangano sul server.
     fs.unlink(filePath, (err) => {
         if (err) console.error("Errore nell'eliminazione del file temporaneo:", err);
     });
 
-    // Rispediamo il JSON completo al frontend React!
     return res.json(risultatoValidazione);
 };
 
