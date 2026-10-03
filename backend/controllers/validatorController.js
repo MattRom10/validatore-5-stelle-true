@@ -11,7 +11,7 @@ const analizzaFormatoNonStrutturato = (mimeType, extension, originalName) => {
         livelloMaturita: "1 Stella - Open License (Dato non strutturato)",
         dettagli: []
     };
-
+//Aggiunti tutti i formati che ci servono
     const coerenzaMime = {
         '.pdf': 'application/pdf',
         '.jpg': 'image/jpeg',
@@ -19,9 +19,11 @@ const analizzaFormatoNonStrutturato = (mimeType, extension, originalName) => {
         '.png': 'image/png',
         '.txt': 'text/plain',
         '.doc': 'application/msword',
-        // Aggiungiamo i mime di Excel nel caso in cui arrivino dal fallback
         '.xls': 'application/vnd.ms-excel',
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.csv': 'text/csv',
+        '.json': 'application/json',
+        '.xml': 'application/xml'
     };
 
     const mimeAtteso = coerenzaMime[extension];
@@ -106,19 +108,18 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     };
 
     try {
-        // Leggiamo solo i primi byte del file per non saturare la memoria con dataset enormi
-        const fileBuffer = fs.readFileSync(filePath);
-        const fileContent = fileBuffer.toString('utf8', 0, Math.min(fileBuffer.length, 5000));
+        // Leggiamo la grandezza del file per evitare il collasso della RAM
+        const stats = fs.statSync(filePath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
 
         if (extension === '.csv') {
+            const fileContent = fs.readFileSync(filePath, 'utf8');
             const lines = fileContent.split('\n').filter(line => line.trim().length > 0);
             
-            // Un CSV valido deve avere almeno due righe (intestazione + dati)
             if (lines.length < 2) {
                 throw new Error("Il file CSV non contiene abbastanza righe per formare una matrice dati.");
             }
 
-            // Controlliamo che la prima riga abbia un delimitatore standard (, o ;)
             const headerLine = lines[0];
             const commaCount = (headerLine.match(/,/g) || []).length;
             const semicolonCount = (headerLine.match(/;/g) || []).length;
@@ -127,52 +128,64 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
                 throw new Error("Nessun delimitatore valido (, o ;) trovato. Il file manca di struttura tabellare.");
             }
 
-            diagnosi.stelleAssegnate = 3;
-            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
-            diagnosi.dettagli.push("Verifica superata: Rilevata matrice dati tabellare non proprietaria.");
-            diagnosi.dettagli.push(`Identificato delimitatore di colonna. L'estrazione dei dati non richiede software commerciale.`);
+            // --- CONTROLLO CATALOGHI (AGGIORNATO) ---
+            // 1. Cerca formati non strutturati anche SENZA il punto (es. "versione pdf", "scansione tiff")
+            const regexFormatiChiusi = /\b(pdf|jpe?g|png|tiff|doc|docx|txt)\b/i;
             
+            // 2. Cerca visualizzatori web, aggiungendo "item.jsp" (tipico della Puglia Digital Library)
+            const regexVetrina = /(opac|viewer|showdocument|dettaglio_documento|handle|gallery|item\.jsp)/i;
+
+            if (regexFormatiChiusi.test(fileContent) || regexVetrina.test(fileContent)) {
+                throw new Error("Il CSV funge da 'vetrina' verso documenti non strutturati (es. PDF, TIFF) o pagine di visualizzazione web. I dati reali puntati sono a 1 stella.");
+            }
+
+            diagnosi.stelleAssegnate = 3;
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (CSV)";
+            diagnosi.dettagli.push("Verifica superata: Rilevata matrice dati tabellare non proprietaria.");
             return diagnosi;
         }
 
         if (extension === '.json') {
-            // Per il JSON, proviamo a farne il parsing
-            const parseData=JSON.parse(fileContent);
-            if (typeof parseData !== 'object' || parseData === null || Array.isArray(parseData) === false || Object.keys(parseData).length === 0) {
-                throw new Error("Il file JSON è sintatticamente valido, ma non contiene una struttura dati valida (E' vuoto o è privo di struttura).");
+            // CONTROLLO DI SICUREZZA PER FILE ENORMI (Evita il blocco del server)
+            if (fileSizeInMB > 15) {
+                diagnosi.stelleAssegnate = 3;
+                diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON Enorme)";
+                diagnosi.dettagli.push(`Verifica leggera superata: Il file è troppo grande (${fileSizeInMB.toFixed(2)} MB) per un'analisi profonda sicura.`);
+                diagnosi.dettagli.push("Assegnazione fiduciaria della terza stella basata sul formato per prevenire il collasso della RAM del server (Denial of Service).");
+                return diagnosi;
+            }
+
+            // Se il file è sotto i 15MB, facciamo l'analisi chirurgica classica
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            const parsedData = JSON.parse(fileContent);
+            if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0) {
+                throw new Error("Il file JSON è sintatticamente valido, ma risulta vuoto o privo di struttura.");
             }
             diagnosi.stelleAssegnate = 3;
-            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON)";
             diagnosi.dettagli.push("Verifica superata: Struttura JSON valida e sintatticamente corretta.");
-            
             return diagnosi;
         }
 
-        //Controllo per XML, che è un formato aperto ma può essere complesso da validare senza uno schema
-
         if (extension === '.xml') {
+            const fileContent = fs.readFileSync(filePath, 'utf8');
             const parser = new XMLParser();
             const parsedXML = parser.parse(fileContent);
-            if(Object.keys(parsedXML).length === 0 || parsedXML === null || typeof parsedXML !== 'object' || Array.isArray(parsedXML)){
+            
+            if (!parsedXML || typeof parsedXML !== 'object' || Array.isArray(parsedXML) || Object.keys(parsedXML).length === 0) {
                 throw new Error("Il file XML risulta vuoto, non formattato correttamente o privo di nodi gerarchici.");
             }
             
             diagnosi.stelleAssegnate = 3;
-            diagnosi.livelloMaturita = "3 Stelle - Open Format (Formato Aperto Strutturato)";
+            diagnosi.livelloMaturita = "3 Stelle - Open Format (XML)";
             diagnosi.dettagli.push("Verifica superata: Struttura XML valida e sintatticamente corretta.");
             return diagnosi;
-
         }
 
     } catch (error) {
-        // FALLBACK: Il formato dichiara di essere aperto, ma non è strutturato correttamente.
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
-        
-        // Salta il livello 2 (non è proprietario) e va direttamente al controllo di 1 stella
         let diagnosiFallback = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
-        
         diagnosiFallback.dettagli.unshift(`Declassamento da 3 stelle: ${error.message}`);
-        
         return diagnosiFallback;
     }
 };
@@ -183,67 +196,67 @@ const analyzeDataset = (req, res) => {
     if(!req.file){
         return res.status(400).json({error:"Errore, non è stato inviato alcun file"});
     }
+
     const originalName = req.file.originalname;
     const extension = path.extname(originalName).toLowerCase();
     const mimeType = req.file.mimetype;
     const fileSize = req.file.size;
-
-    // Facciamo una specie di costruttore dove creiamo la nostra diagnosi
-    let diagnosi = {
-        file: originalName,
-        formato: extension,
-        mimeType: mimeType,
-        dimensioneKB: (fileSize / 1024).toFixed(2),
-        stelleAssegnate: 0,
-        livelloMaturita: "",
-        dettagli: []
-    };
-
-    //Facciamo la prima schermatura in base alla estensione del file inviato
-
-    // --- LIVELLO 1 STELLA: Dati non strutturati / formati statici ---
-    const estensioni1Stella = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'];
     
-    // --- LIVELLO 2 STELLE: Dati strutturati ma proprietari ---
+    // CORREZIONE 2: Dobbiamo prendere il percorso del file salvato da multer!
+    const filePath = req.file.path; 
+
+    // Questa variabile conterrà la risposta finale generata dalle varie funzioni
+    let risultatoValidazione;
+
+    const estensioni1Stella = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'];
     const estensioni2Stelle = ['.xls', '.xlsx', '.ods'];
-
-    // --- LIVELLO 3 STELLE: Dati strutturati in formato aperto (placeholder) ---
     const estensioni3Stelle = ['.csv', '.json', '.xml'];
-
-    // --- LIVELLI 4 E 5 STELLE: Dati semantici RDF (placeholder) ---
     const estensioniSemantiche = ['.rdf', '.ttl', '.n3', '.nt', '.jsonld'];
 
-
-    if(estensioni1Stella.includes(extension)){
-        risultatoValidazione = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
-    }
-
-    if (estensioni2Stelle.includes(extension)) {
-        risultatoValidazione = analizzaFormatoProprietario(filePath, originalName, mimeType, extension);
-    }
-
+    // CORREZIONE 3: Smistamento corretto a cascata
     if (estensioni3Stelle.includes(extension)) {
-        diagnosi.stelleAssegnate = 3;
-        diagnosi.livelloMaturita = "3 Stelle - Open Format (In fase di test approfondito)";
-        diagnosi.dettagli.push("Formato tabellare aperto non proprietario.");
-        return res.json(diagnosi);
+        risultatoValidazione = analizzaFormatoAperto(filePath, originalName, mimeType, extension);
+    } 
+    else if (estensioni2Stelle.includes(extension)) {
+        risultatoValidazione = analizzaFormatoProprietario(filePath, originalName, mimeType, extension);
+    } 
+    else if (estensioni1Stella.includes(extension)) {
+        risultatoValidazione = analizzaFormatoNonStrutturato(mimeType, extension, originalName);
+    } 
+    else if (estensioniSemantiche.includes(extension)) {
+        risultatoValidazione = {
+            file: originalName,
+            stelleAssegnate: 4,
+            livelloMaturita: "4/5 Stelle - Semantic Web / Linked Data",
+            dettagli: ["Rilevato formato del Web Semantico. Richiede scansione del grafo RDF."]
+        };
+    } 
+    else {
+        // Formato non riconosciuto
+        // Eliminiamo comunque il file temporaneo prima di dare errore
+        fs.unlink(filePath, () => {});
+        return res.status(400).json({
+            file: originalName,
+            stelleAssegnate: 0,
+            livelloMaturita: "Formato non riconosciuto",
+            dettagli: ["Il formato del file non è supportato dal validatore."]
+        });
     }
 
-    if (estensioniSemantiche.includes(extension)) {
-        diagnosi.stelleAssegnate = 4;
-        diagnosi.livelloMaturita = "4/5 Stelle - Semantic Web / Linked Data";
-        diagnosi.dettagli.push("Rilevato formato del Web Semantico. Richiede scansione del grafo RDF.");
-        return res.json(diagnosi);
-    }
+    // Aggiungiamo i metadati finali alla diagnosi
+    risultatoValidazione.dimensioneKB = (fileSize / 1024).toFixed(2);
+    risultatoValidazione.mimeType = mimeType;
 
-    // Se il file non rientra in nessuna delle categorie sopra, restituiamo un messaggio di errore
-    diagnosi.stelleAssegnate = 0;
-    diagnosi.livelloMaturita = "Formato non riconosciuto";
-    diagnosi.dettagli.push("Il formato del file non è supportato dal validatore.");
-    return res.status(400).json(diagnosi);
+    // Questa funzione elimina fisicamente il file da /uploads una volta finiti i nostri controlli. 
+    //Questo serve sia per motivi di sicurezza che per evitare di saturare lo spazio disco del server con file temporanei.
+    //Ma anche per un motivo di privacy: non vogliamo che i file caricati rimangano sul server.
+    fs.unlink(filePath, (err) => {
+        if (err) console.error("Errore nell'eliminazione del file temporaneo:", err);
+    });
 
-
-    };
+    // Rispediamo il JSON completo al frontend React!
+    return res.json(risultatoValidazione);
+};
 
 module.exports = {
     analyzeDataset
