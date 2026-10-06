@@ -274,8 +274,144 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     }
 };
 
-// --- ANALISI 4 E 5 STELLE (Web Semantico e Linked Open Data) ---
+const analizzaFormato4stelle = (filePath, originalName, mimeType, extension)=>{
+    //Ridichiaro Diagnosi anche se potrei toglierlo ma lo faccio perché un domani possa essere usata la funzione solo per capire se è 4 stelle o meno senza passare per 5 stelle
+    let diagnosi = {
+        file: originalName,
+        stelleAssegnate: 0,
+        livelloMaturita: "",
+        dettagli: []
+    };
 
+     
+    try {
+        const stats = fs.statSync(filePath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+        
+        // Calcolo RAM dinamico per sicurezza
+        const ramLiberaMB = os.freemem() / (1024 * 1024);
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
+        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
+
+        // Funzione per leggere un chunk o il file intero
+        const leggiContenuto = () => {
+            if (isBigData) {
+                diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi euristica a blocchi applicata.`);
+                const fd = fs.openSync(filePath, 'r');
+                const allocSize = Math.min(5 * 1024 * 1024, stats.size); // Leggiamo i primi 5MB
+                const buffer = Buffer.alloc(allocSize);
+                const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
+                fs.closeSync(fd);
+                return buffer.toString('utf8', 0, bytesRead);
+            }
+            // Per file di dimensioni normali, leggiamo tutto il contenuto
+            return fs.readFileSync(filePath, 'utf8');
+            //il utf8 è un encoding standard per i file di testo, che permette di rappresentare caratteri di diverse lingue e simboli speciali in modo coerente.
+        };
+
+        const fileContent = leggiContenuto();
+
+        // Cerchiamo i marcatori tipici e fondamentali dei grafi semantici (RDF/XML, Turtle, JSON-LD)
+        const regex4Stelle = /(<rdf:RDF|@prefix|@context|xmlns:rdf|http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#)/i;
+        
+        if (!regex4Stelle.test(fileContent)) {
+            // Se non ha i marcatori base, non è un file semantico.
+            // Lanciamo l'errore per farlo cadere nel blocco catch e declassarlo a 3 stelle.
+            throw new Error("Il file non presenta i marcatori standard di un grafo semantico (es. tag <rdf:RDF>, @prefix o @context).");
+        }
+
+        // Se sopravvive al test, è un grafo valido ma isolato (visto che è stato declassato dal 5 stelle)
+        diagnosi.stelleAssegnate = 4;
+        diagnosi.livelloMaturita = "4 Stelle - Semantic Web (RDF isolato)";
+        diagnosi.dettagli.push("Verifica superata: Rilevata sintassi strutturale del Web Semantico (RDF, Turtle o JSON-LD).");
+        diagnosi.dettagli.push("Limite rilevato: Il grafo utilizza URI per denotare le entità, ma non si interconnette a vocabolari esterni. Agisce come un silo.");
+        
+        return diagnosi;
+        
+
+
+        
+    } catch (error) {
+        console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
+        
+        // DECLASSAMENTO A 3 STELLE:
+        // Se un file .rdf fallisce l'analisi semantica, molto probabilmente è comunque un file XML valido.
+        // Se è .jsonld, è un JSON. Se è .csv (con mapping sbagliato), è un CSV.
+        // Simuliamo l'estensione di base per il controllo a 3 stelle.
+        let estensioneBase = extension;
+        if (extension === '.rdf' || extension === '.owl') estensioneBase = '.xml';
+        if (extension === '.jsonld') estensioneBase = '.json';
+
+        let diagnosiFallback = analizzaFormatoAperto(filePath, originalName, mimeType, estensioneBase);
+        
+        // Se fallisce anche il 3 stelle (es. XML corrotto), analizzaFormatoAperto lo manderà in automatico a 1 stella.
+        // Dobbiamo solo ricordarci di aggiungere la nostra motivazione in cima.
+        diagnosiFallback.dettagli.unshift(`Declassamento da formati semantici (4/5 stelle): ${error.message}`);
+        
+        return diagnosiFallback;
+    }
+
+}
+
+// --- ANALISI 5 STELLE (Web Semantico e Linked Open Data) ---
+const analizzaFormatoSemantico = (filePath, originalName, mimeType, extension) => {
+    let diagnosi = {
+        file: originalName,
+        stelleAssegnate: 0,
+        livelloMaturita: "",
+        dettagli: []
+    };
+
+    try {
+        // Controllo dimensione del file e RAM disponibile
+        const stats = fs.statSync(filePath);
+        const fileSizeInMB = stats.size / (1024 * 1024);
+        
+        // Calcolo RAM dinamico per sicurezza
+        const ramLiberaMB = os.freemem() / (1024 * 1024);
+        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
+        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
+
+        // Funzione per leggere un chunk o il file intero
+        const leggiContenuto = () => {
+            if (isBigData) {
+                diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi euristica a blocchi applicata.`);
+                const fd = fs.openSync(filePath, 'r');
+                const allocSize = Math.min(5 * 1024 * 1024, stats.size); // Leggiamo i primi 5MB
+                const buffer = Buffer.alloc(allocSize);
+                const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
+                fs.closeSync(fd);
+                return buffer.toString('utf8', 0, bytesRead);
+            }
+            // Per file di dimensioni normali, leggiamo tutto il contenuto
+            return fs.readFileSync(filePath, 'utf8');
+            //il utf8 è un encoding standard per i file di testo, che permette di rappresentare caratteri di diverse lingue e simboli speciali in modo coerente.
+        };
+
+        const fileContent = leggiContenuto();
+
+        // 1. Verifichiamo se è effettivamente un formato semantico (RDF, Turtle, JSON-LD)
+        // Cerca le proprietà di linking formattate come tag XML (es. <owl:sameAs) 
+        const regex5Stelle = /(<owl:sameAs|<skos:exactMatch|<skos:closeMatch|<rdfs:seeAlso|<schema:sameAs|owl:sameAs[\s:"]|skos:exactMatch[\s:"]|skos:closeMatch[\s:"]|rdfs:seeAlso[\s:"]|schema:sameAs[\s:"])/i;
+        //Il .test() è un metodo che verifica se una stringa corrisponde a un pattern specifico definito da una regex. In questo caso, controlla se il contenuto del file contiene riferimenti a proprietà di linking semantico.
+        if (regex5Stelle.test(fileContent)) {
+            diagnosi.stelleAssegnate = 5;
+            diagnosi.dettagli.push("Verifica superata: Rilevata sintassi del Web Semantico (RDF/Turtle/JSON-LD).");
+            diagnosi.dettagli.push("Verifica superata: Rilevati predicati di linking semantico (es. owl:sameAs). Il dataset è interconnesso alla LOD Cloud.");
+            return diagnosi;
+        }
+        throw new Error("Il file semantico non contiene predicati di linking (owl:sameAs, skos:exactMatch, ecc.). Non è interconnesso alla LOD Cloud.");
+
+        
+    } catch (error) {
+        console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
+        
+        // DECLASSAMENTO A 4 STELLE:
+        let diagnosiFallback = analizzaFormato4stelle(filePath, originalName, mimeType, extension);
+        diagnosiFallback.dettagli.unshift(`Declassamento da 5 stelle: ${error.message}`);
+        return diagnosiFallback;
+    }
+};
 
 const analyzeDataset = (req, res) => {
     if(!req.file){
