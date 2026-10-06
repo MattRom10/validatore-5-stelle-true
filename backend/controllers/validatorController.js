@@ -27,12 +27,14 @@ const analizzaFormatoNonStrutturato = (filePath, mimeType, extension, originalNa
         '.xml': 'application/xml'
     };
 
+    // Controllo di coerenza tra estensione e firma MIME
     const mimeAtteso = coerenzaMime[extension];
 
     if (mimeAtteso && mimeType.includes(mimeAtteso.split('/')[0])) {
         
-        // NUOVO CONTROLLO ANTI-CORRUZIONE E SPOOFING PER FILE TESTUALI
-        if (extension === '.txt' || extension === '.csv') {
+        // NUOVO CONTROLLO ANTI-CORRUZIONE E SPOOFING PER FILE TESTUALI 
+        // Controllo se il file di testo contiene caratteri binari o nulli
+        if (['.txt', '.csv', '.json', '.xml'].includes(extension)) {
             const fd = fs.openSync(filePath, 'r');
             const buffer = Buffer.alloc(1024);
             fs.readSync(fd, buffer, 0, 1024, 0);
@@ -272,6 +274,9 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     }
 };
 
+// --- ANALISI 4 E 5 STELLE (Web Semantico e Linked Open Data) ---
+
+
 const analyzeDataset = (req, res) => {
     if(!req.file){
         return res.status(400).json({error:"Errore, non è stato inviato alcun file"});
@@ -301,12 +306,7 @@ const analyzeDataset = (req, res) => {
         risultatoValidazione = analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
     } 
     else if (estensioniSemantiche.includes(extension)) {
-        risultatoValidazione = {
-            file: originalName,
-            stelleAssegnate: 4,
-            livelloMaturita: "4/5 Stelle - Semantic Web / Linked Data",
-            dettagli: ["Rilevato formato del Web Semantico. Richiede scansione del grafo RDF."]
-        };
+        risultatoValidazione= analizzaFormatoSemantico(filePath, originalName, mimeType, extension)
     } 
     else {
         fs.unlink(filePath, () => {});
