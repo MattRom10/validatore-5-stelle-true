@@ -363,50 +363,52 @@ const analizzaFormatoSemantico = (filePath, originalName, mimeType, extension) =
     };
 
     try {
-        // Controllo dimensione del file e RAM disponibile
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
-        
-        // Calcolo RAM dinamico per sicurezza
         const ramLiberaMB = os.freemem() / (1024 * 1024);
         const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
         const isBigData = fileSizeInMB > sogliaSicurezzaMB;
 
-        // Funzione per leggere un chunk o il file intero
         const leggiContenuto = () => {
             if (isBigData) {
                 diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi euristica a blocchi applicata.`);
                 const fd = fs.openSync(filePath, 'r');
-                const allocSize = Math.min(5 * 1024 * 1024, stats.size); // Leggiamo i primi 5MB
+                const allocSize = Math.min(5 * 1024 * 1024, stats.size);
                 const buffer = Buffer.alloc(allocSize);
                 const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
                 fs.closeSync(fd);
                 return buffer.toString('utf8', 0, bytesRead);
             }
-            // Per file di dimensioni normali, leggiamo tutto il contenuto
             return fs.readFileSync(filePath, 'utf8');
-            //il utf8 è un encoding standard per i file di testo, che permette di rappresentare caratteri di diverse lingue e simboli speciali in modo coerente.
         };
 
         const fileContent = leggiContenuto();
 
-        // 1. Verifichiamo se è effettivamente un formato semantico (RDF, Turtle, JSON-LD)
-        // Cerca le proprietà di linking formattate come tag XML (es. <owl:sameAs) 
+        // 1. PRIMO CHECK (Base RDF): Anche se è il metodo per il 5 stelle, è giusto controllare se ha l'infrastruttura a 4 stelle
+        const regex4Stelle = /(<rdf:RDF|@prefix|@context|xmlns:rdf|http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#)/i;
+        if (!regex4Stelle.test(fileContent)) {
+            // In questo modo si declassa subito, per non perdere tempo a fare il check del 5 stelle su un file che non ha nemmeno la struttura base.
+            throw new Error("Il file non presenta i marcatori standard di un grafo semantico (es. tag <rdf:RDF>, @prefix o @context).");
+        }
+
+        // 2. SECONDO CHECK (Linked Data): Controlliamo le proprietà del 5 stelle
         const regex5Stelle = /(<owl:sameAs|<skos:exactMatch|<skos:closeMatch|<rdfs:seeAlso|<schema:sameAs|owl:sameAs[\s:"]|skos:exactMatch[\s:"]|skos:closeMatch[\s:"]|rdfs:seeAlso[\s:"]|schema:sameAs[\s:"])/i;
-        //Il .test() è un metodo che verifica se una stringa corrisponde a un pattern specifico definito da una regex. In questo caso, controlla se il contenuto del file contiene riferimenti a proprietà di linking semantico.
+        
         if (regex5Stelle.test(fileContent)) {
             diagnosi.stelleAssegnate = 5;
-            diagnosi.dettagli.push("Verifica superata: Rilevata sintassi del Web Semantico (RDF/Turtle/JSON-LD).");
+            diagnosi.livelloMaturita = "5 Stelle - Linked Open Data (LOD)";
+            diagnosi.dettagli.push("Verifica superata: Rilevata sintassi base del Web Semantico (RDF/Turtle/JSON-LD).");
             diagnosi.dettagli.push("Verifica superata: Rilevati predicati di linking semantico (es. owl:sameAs). Il dataset è interconnesso alla LOD Cloud.");
             return diagnosi;
         }
+        
+        // Se arriviamo qui, ha passato il primo check ma ha fallito il secondo.
         throw new Error("Il file semantico non contiene predicati di linking (owl:sameAs, skos:exactMatch, ecc.). Non è interconnesso alla LOD Cloud.");
 
-        
     } catch (error) {
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
         
-        // DECLASSAMENTO A 4 STELLE:
+        // DECLASSAMENTO A 4 STELLE (o giù di lì, a seconda di dove ha fallito)
         let diagnosiFallback = analizzaFormato4stelle(filePath, originalName, mimeType, extension);
         diagnosiFallback.dettagli.unshift(`Declassamento da 5 stelle: ${error.message}`);
         return diagnosiFallback;
