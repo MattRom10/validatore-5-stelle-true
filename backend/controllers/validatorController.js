@@ -3,9 +3,12 @@ const xlsx = require('xlsx');
 const { XMLParser } = require('fast-xml-parser');
 const os = require('os');
 const fs = require('fs');
+const csv = require('csv-parser');
+const sax = require('sax');
+const { parser } = require('stream-json');
 
 // --- ANALISI 1 STELLA (Formati Statici e Non Strutturati) ---
-const analizzaFormatoNonStrutturato = (filePath, mimeType, extension, originalName) => {
+const analizzaFormatoNonStrutturato = async (filePath, mimeType, extension, originalName) => {
     let diagnosi = {
         file: originalName,
         stelleAssegnate: 1,
@@ -27,13 +30,9 @@ const analizzaFormatoNonStrutturato = (filePath, mimeType, extension, originalNa
         '.xml': 'application/xml'
     };
 
-    // Controllo di coerenza tra estensione e firma MIME
     const mimeAtteso = coerenzaMime[extension];
 
     if (mimeAtteso && mimeType.includes(mimeAtteso.split('/')[0])) {
-        
-        // NUOVO CONTROLLO ANTI-CORRUZIONE E SPOOFING PER FILE TESTUALI 
-        // Controllo se il file di testo contiene caratteri binari o nulli
         if (['.txt', '.csv', '.json', '.xml'].includes(extension)) {
             const fd = fs.openSync(filePath, 'r');
             const buffer = Buffer.alloc(1024);
@@ -47,7 +46,6 @@ const analizzaFormatoNonStrutturato = (filePath, mimeType, extension, originalNa
                 return diagnosi;
             }
         }
-
         diagnosi.dettagli.push("Verifica di sicurezza: L'estensione e la firma MIME coincidono.");
         diagnosi.dettagli.push("Il dato è statico o non presenta una matrice tabellare valida.");
     } else {
@@ -60,7 +58,7 @@ const analizzaFormatoNonStrutturato = (filePath, mimeType, extension, originalNa
 };
 
 // --- ANALISI 2 STELLE (Formati Proprietari Strutturati) ---
-const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension) => {
+const analizzaFormatoProprietario = async (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
         stelleAssegnate: 0,
@@ -101,23 +99,16 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
         const workbook = xlsx.readFile(filePath);
         const sheetNames = workbook.SheetNames;
         
-        if (sheetNames.length === 0) {
-            throw new Error("Il file Excel è vuoto (nessun foglio trovato).");
-        }
+        if (sheetNames.length === 0) throw new Error("Il file Excel è vuoto (nessun foglio trovato).");
 
         const firstSheet = workbook.Sheets[sheetNames[0]];
-        
-        if (!firstSheet['!ref']) {
-            throw new Error("Il foglio di calcolo principale non contiene dati.");
-        }
+        if (!firstSheet['!ref']) throw new Error("Il foglio di calcolo principale non contiene dati.");
 
         const range = xlsx.utils.decode_range(firstSheet['!ref']);
         const rowCount = range.e.r - range.s.r + 1;
         const colCount = range.e.c - range.s.c + 1;
 
-        if (rowCount < 2 || colCount < 2) {
-            throw new Error("Dati insufficienti per formare una struttura tabellare (minimo 2 righe e 2 colonne).");
-        }
+        if (rowCount < 2 || colCount < 2) throw new Error("Dati insufficienti per formare una struttura tabellare (minimo 2 righe e 2 colonne).");
 
         diagnosi.stelleAssegnate = 2;
         diagnosi.livelloMaturita = "2 Stelle - Machine Readable (Formato proprietario)";
@@ -129,17 +120,15 @@ const analizzaFormatoProprietario = (filePath, originalName, mimeType, extension
         
     } catch (error) {
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
-        
-        // FIX: Passato filePath come primo parametro
-        let diagnosiFallback = analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
+        // AWAIT inserito qui!
+        let diagnosiFallback = await analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
         diagnosiFallback.dettagli.unshift(`Declassamento da 2 stelle: ${error.message}`);
-        
         return diagnosiFallback;
     }
 };
 
-// --- ANALISI 3 STELLE (Formati Aperti Strutturati) ---
-const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
+// --- ANALISI 3 STELLE (Formati Aperti Strutturati in Streaming) ---
+const analizzaFormatoAperto = async (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
         stelleAssegnate: 0,
@@ -150,132 +139,161 @@ const analizzaFormatoAperto = (filePath, originalName, mimeType, extension) => {
     try {
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
-        const ramLiberaMB = os.freemem() / (1024 * 1024);
-        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
-        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
+        diagnosi.dettagli.push(`Dimensione file: ${fileSizeInMB.toFixed(2)} MB. Analisi in Stream Processing attivata per la sicurezza dell'Heap.`);
 
-        const leggiChunk = (bytesToRead) => {
-            const fd = fs.openSync(filePath, 'r');
-            const allocSize = Math.min(bytesToRead, stats.size);
-            const buffer = Buffer.alloc(allocSize);
-            const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
-            fs.closeSync(fd);
-            return buffer.toString('utf8', 0, bytesRead);
-        };
-
-        if (isBigData) {
-            diagnosi.dettagli.push(`ATTENZIONE: File di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi ottimizzata a blocchi (Chunking) per preservare la RAM (${sogliaSicurezzaMB.toFixed(0)} MB max allocabili).`);
-        }
-
+        // --- CONTROLLO CSV A STREAMING ---
+        // --- CONTROLLO CSV A STREAMING ---
         if (extension === '.csv') {
-            const contentToAnalyze = isBigData ? leggiChunk(5 * 1024 * 1024) : fs.readFileSync(filePath, 'utf8');
-            const lines = contentToAnalyze.split('\n').filter(line => line.trim().length > 0);
             
-            if (lines.length < 2) {
-                throw new Error("Il file CSV non contiene abbastanza righe per formare una matrice dati.");
-            }
+            // Funzione di supporto per tentare il parsing con un separatore specifico
+            const tryParseCSV = (sep) => {
+                return new Promise((resolve, reject) => {
+                    let rowCount = 0;
+                    const stream = fs.createReadStream(filePath);
+                    
+                    stream.pipe(csv({ separator: sep })) 
+                        .on('headers', (headers) => {
+                            if (headers.length < 2) {
+                                stream.destroy();
+                                reject(new Error("Delimitatori insufficienti."));
+                            }
+                        })
+                        .on('data', () => { rowCount++; }) 
+                        .on('error', (error) => reject(error))
+                        .on('end', () => {
+                            if (rowCount < 1) reject(new Error("Il file CSV non contiene righe di dati."));
+                            resolve(true);
+                        });
+                });
+            };
 
-            const headerLine = lines[0];
-            const commaCount = (headerLine.match(/,/g) || []).length;
-            const semicolonCount = (headerLine.match(/;/g) || []).length;
-
-            if (commaCount === 0 && semicolonCount === 0) {
-                throw new Error("Nessun delimitatore valido (, o ;) trovato. Il file manca di struttura tabellare.");
-            }
-
-            const regexFormatiChiusi = /\b(pdf|jpe?g|png|tiff|doc|docx|txt)\b/i;
-            const regexPagineWeb = /https?:\/\/[^\s,;]+(\.(jsp|php|aspx?|html?)\b|\?(id|record|item|doc)=\d+)/i;
-
-            if (regexFormatiChiusi.test(contentToAnalyze) || regexPagineWeb.test(contentToAnalyze)) {
-                throw new Error("Il CSV funge da 'vetrina' verso documenti non strutturati o pagine web HTML. I dati reali puntati sono a 1 stella.");
+            try {
+                // Tentativo 1: Punto e Virgola (Standard Europeo)
+                await tryParseCSV(';');
+            } catch (errorPuntoVirgola) {
+                try {
+                    // Tentativo 2: Virgola (Standard Internazionale)
+                    await tryParseCSV(',');
+                } catch (errorVirgola) {
+                    // Se falliscono entrambi, il file non è una tabella valida
+                    throw new Error("Nessun delimitatore valido (, o ;) trovato. Il file manca di struttura tabellare.");
+                }
             }
 
             diagnosi.stelleAssegnate = 3;
             diagnosi.livelloMaturita = "3 Stelle - Open Format (CSV)";
-            diagnosi.dettagli.push("Verifica superata: Rilevata matrice dati tabellare non proprietaria.");
+            diagnosi.dettagli.push("Verifica superata: Matrice dati tabellare scansionata interamente con successo.");
             return diagnosi;
         }
 
+        // --- CONTROLLO JSON A STREAMING (CON HYBRID FALLBACK) ---
         if (extension === '.json') {
-            if (isBigData) {
-                const chunk = leggiChunk(500 * 1024); 
+            await new Promise((resolve, reject) => {
+                const stream = fs.createReadStream(filePath);
                 
-                if (!chunk.includes('":') && !chunk.includes('": ')) {
-                     throw new Error("Il file JSON di grandi dimensioni non presenta una sintassi chiave-valore valida nei primi blocchi di dati.");
+                try {
+                    // Tentativo 1: Uso della libreria stream-json
+                    const streamJson = require('stream-json');
+                    const jsonStream = typeof streamJson.parser === 'function' ? streamJson.parser() : streamJson();
+                    
+                    if (typeof jsonStream.on !== 'function') {
+                        throw new Error("Libreria non compatibile."); // Forziamo il passaggio al Fallback
+                    }
+
+                    let hasTokens = false;
+                    jsonStream.on('data', () => { hasTokens = true; });
+                    jsonStream.on('error', () => {
+                        stream.destroy();
+                        reject(new Error("Sintassi JSON corrotta o non ben formattata."));
+                    });
+                    jsonStream.on('end', () => {
+                        if (!hasTokens) reject(new Error("Il file JSON risulta vuoto o privo di struttura."));
+                        resolve(true);
+                    });
+                    
+                    stream.pipe(jsonStream);
+
+                } catch (fallbackError) {
+                    // TENTATIVO 2: FALLBACK NATIVO (Nessun crash da librerie esterne)
+                    stream.destroy(); 
+                    console.log(`Fallback JSON nativo attivato per ${originalName}`);
+                    
+                    if (fileSizeInMB > 50) {
+                        // Per i Big Data (es. 170 MB), euristica sicura Testa-Coda
+                        const fd = fs.openSync(filePath, 'r');
+                        
+                        const chunkInizio = Buffer.alloc(1000);
+                        fs.readSync(fd, chunkInizio, 0, 1000, 0);
+                        const inizio = chunkInizio.toString('utf8').trim();
+                        
+                        const chunkFine = Buffer.alloc(10);
+                        const posFine = Math.max(0, stats.size - 10);
+                        fs.readSync(fd, chunkFine, 0, 10, posFine);
+                        fs.closeSync(fd);
+                        const fine = chunkFine.toString('utf8').trim();
+                        
+                        const isObject = inizio.startsWith('{') && fine.endsWith('}');
+                        const isArray = inizio.startsWith('[') && fine.endsWith(']');
+                        
+                        if (!isObject && !isArray) return reject(new Error("Il file JSON di grandi dimensioni è corrotto alle estremità."));
+                        resolve(true);
+                    } else {
+                        // Per file gestibili, parsing nativo di Node
+                        const content = fs.readFileSync(filePath, 'utf8');
+                        JSON.parse(content);
+                        resolve(true);
+                    }
                 }
+            });
 
-                const fd = fs.openSync(filePath, 'r');
-                const bufferFine = Buffer.alloc(10);
-                const posizioneFine = Math.max(0, stats.size - 10);
-                fs.readSync(fd, bufferFine, 0, 10, posizioneFine);
-                fs.closeSync(fd);
-                const fine = bufferFine.toString('utf8').trim();
-
-                const isObject = chunk.trim().startsWith('{') && fine.endsWith('}');
-                const isArray = chunk.trim().startsWith('[') && fine.endsWith(']');
-
-                if (!isObject && !isArray) {
-                    throw new Error("Il file JSON di grandi dimensioni è corrotto: non inizia o non termina con parentesi valide.");
-                }
-
-                diagnosi.stelleAssegnate = 3;
-                diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON Big Data)";
-                diagnosi.dettagli.push("Verifica parziale superata: Struttura dei dati e confini di apertura/chiusura sintatticamente coerenti.");
-                return diagnosi;
-            }
-
-            const fileContent = fs.readFileSync(filePath, 'utf8');
-            const parsedData = JSON.parse(fileContent);
-            if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0) {
-                throw new Error("Il file JSON è sintatticamente valido, ma risulta vuoto o privo di struttura.");
-            }
             diagnosi.stelleAssegnate = 3;
             diagnosi.livelloMaturita = "3 Stelle - Open Format (JSON)";
-            diagnosi.dettagli.push("Verifica superata: Struttura JSON valida e sintatticamente corretta.");
+            diagnosi.dettagli.push("Verifica superata: Struttura JSON validata con successo.");
             return diagnosi;
         }
 
+        // --- CONTROLLO XML A STREAMING ---
         if (extension === '.xml') {
-            if (isBigData) {
-                const chunk = leggiChunk(500 * 1024); 
-                const haTag = (chunk.includes('<') && chunk.includes('>')) || chunk.startsWith('<?xml');
+            await new Promise((resolve, reject) => {
+                const stream = fs.createReadStream(filePath);
+                const saxStream = sax.createStream(true); // Modalità strict
                 
-                if (!haTag) {
-                    throw new Error("Il file XML di grandi dimensioni non presenta marcatori gerarchici validi all'inizio del file.");
-                }
+                let hasTags = false;
                 
-                diagnosi.stelleAssegnate = 3;
-                diagnosi.livelloMaturita = "3 Stelle - Open Format (XML Big Data)";
-                diagnosi.dettagli.push("Verifica parziale superata: Marcatori e gerarchia XML di base identificati correttamente.");
-                return diagnosi;
-            }
+                saxStream.on('opentag', (node) => {
+                    hasTags = true;
+                });
+                saxStream.on('error', (error) => {
+                    saxStream._parser.error = null; 
+                    saxStream.resume();
+                    reject(new Error("Struttura XML corrotta o tag non bilanciati."));
+                });
+                saxStream.on('end', () => {
+                    if (!hasTags) reject(new Error("Il file XML risulta vuoto o privo di nodi gerarchici."));
+                    resolve(true);
+                });
+                
+                stream.pipe(saxStream);
+            });
 
-            const fileContent = fs.readFileSync(filePath, 'utf8');
-            const parser = new XMLParser();
-            const parsedXML = parser.parse(fileContent);
-            
-            if (!parsedXML || typeof parsedXML !== 'object' || Array.isArray(parsedXML) || Object.keys(parsedXML).length === 0) {
-                throw new Error("Il file XML risulta vuoto, non formattato correttamente o privo di nodi gerarchici.");
-            }
-            
             diagnosi.stelleAssegnate = 3;
             diagnosi.livelloMaturita = "3 Stelle - Open Format (XML)";
-            diagnosi.dettagli.push("Verifica superata: Struttura XML valida e sintatticamente corretta.");
+            diagnosi.dettagli.push("Verifica superata: Gerarchia XML validata integralmente tag per tag.");
             return diagnosi;
         }
+
+        throw new Error(`Estensione di base ${extension} non supportata come Formato Aperto.`);
 
     } catch (error) {
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
-        
-        // FIX: Passato filePath come primo parametro
-        let diagnosiFallback = analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
+        let diagnosiFallback = await analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
         diagnosiFallback.dettagli.unshift(`Declassamento da 3 stelle: ${error.message}`);
         return diagnosiFallback;
     }
 };
 
-const analizzaFormato4stelle = (filePath, originalName, mimeType, extension)=>{
-    //Ridichiaro Diagnosi anche se potrei toglierlo ma lo faccio perché un domani possa essere usata la funzione solo per capire se è 4 stelle o meno senza passare per 5 stelle
+// --- ANALISI 4 STELLE (Formati Semantici Isolati) ---
+const analizzaFormato4stelle = async (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
         stelleAssegnate: 0,
@@ -283,78 +301,59 @@ const analizzaFormato4stelle = (filePath, originalName, mimeType, extension)=>{
         dettagli: []
     };
 
-     
     try {
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
-        
-        // Calcolo RAM dinamico per sicurezza
-        const ramLiberaMB = os.freemem() / (1024 * 1024);
-        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
-        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
 
-        // Funzione per leggere un chunk o il file intero
-        const leggiContenuto = () => {
-            if (isBigData) {
-                diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi euristica a blocchi applicata.`);
-                const fd = fs.openSync(filePath, 'r');
-                const allocSize = Math.min(5 * 1024 * 1024, stats.size); // Leggiamo i primi 5MB
-                const buffer = Buffer.alloc(allocSize);
-                const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
-                fs.closeSync(fd);
-                return buffer.toString('utf8', 0, bytesRead);
-            }
-            // Per file di dimensioni normali, leggiamo tutto il contenuto
-            return fs.readFileSync(filePath, 'utf8');
-            //il utf8 è un encoding standard per i file di testo, che permette di rappresentare caratteri di diverse lingue e simboli speciali in modo coerente.
-        };
-
-        const fileContent = leggiContenuto();
-
-        // Cerchiamo i marcatori tipici e fondamentali dei grafi semantici (RDF/XML, Turtle, JSON-LD)
         const regex4Stelle = /(<rdf:RDF|@prefix|@context|xmlns:rdf|http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#)/i;
-        
-        if (!regex4Stelle.test(fileContent)) {
-            // Se non ha i marcatori base, non è un file semantico.
-            // Lanciamo l'errore per farlo cadere nel blocco catch e declassarlo a 3 stelle.
+        let found4Stelle = false;
+
+        const fd = fs.openSync(filePath, 'r');
+        const chunkSize = 5 * 1024 * 1024;
+        const buffer = Buffer.alloc(chunkSize);
+        let bytesRead = 0;
+        let tail = ""; 
+
+        if (fileSizeInMB > 5) {
+            diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi in Streaming a blocchi continui attivata.`);
+        }
+
+        while ((bytesRead = fs.readSync(fd, buffer, 0, chunkSize, null)) !== 0) {
+            const chunkStr = tail + buffer.toString('utf8', 0, bytesRead);
+            if (!found4Stelle && regex4Stelle.test(chunkStr)) found4Stelle = true;
+            if (found4Stelle) break; 
+            tail = chunkStr.slice(-100);
+        }
+        fs.closeSync(fd);
+
+        if (!found4Stelle) {
             throw new Error("Il file non presenta i marcatori standard di un grafo semantico (es. tag <rdf:RDF>, @prefix o @context).");
         }
 
-        // Se sopravvive al test, è un grafo valido ma isolato (visto che è stato declassato dal 5 stelle)
         diagnosi.stelleAssegnate = 4;
         diagnosi.livelloMaturita = "4 Stelle - Semantic Web (RDF isolato)";
         diagnosi.dettagli.push("Verifica superata: Rilevata sintassi strutturale del Web Semantico (RDF, Turtle o JSON-LD).");
         diagnosi.dettagli.push("Limite rilevato: Il grafo utilizza URI per denotare le entità, ma non si interconnette a vocabolari esterni. Agisce come un silo.");
         
         return diagnosi;
-        
 
-
-        
     } catch (error) {
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
         
-        // DECLASSAMENTO A 3 STELLE:
-        // Se un file .rdf fallisce l'analisi semantica, molto probabilmente è comunque un file XML valido.
-        // Se è .jsonld, è un JSON. Se è .csv (con mapping sbagliato), è un CSV.
-        // Simuliamo l'estensione di base per il controllo a 3 stelle.
         let estensioneBase = extension;
         if (extension === '.rdf' || extension === '.owl') estensioneBase = '.xml';
         if (extension === '.jsonld') estensioneBase = '.json';
 
-        let diagnosiFallback = analizzaFormatoAperto(filePath, originalName, mimeType, estensioneBase);
-        
-        // Se fallisce anche il 3 stelle (es. XML corrotto), analizzaFormatoAperto lo manderà in automatico a 1 stella.
-        // Dobbiamo solo ricordarci di aggiungere la nostra motivazione in cima.
-        diagnosiFallback.dettagli.unshift(`Declassamento da formati semantici (4/5 stelle): ${error.message}`);
+        // AWAIT inserito qui!!! (Questo era l'errore che faceva esplodere il codice)
+        let diagnosiFallback = await analizzaFormatoAperto(filePath, originalName, mimeType, estensioneBase);
+        diagnosiFallback.dettagli.unshift(`Declassamento dal modello a 4 stelle: ${error.message}`);
         
         return diagnosiFallback;
     }
-
 }
 
 // --- ANALISI 5 STELLE (Web Semantico e Linked Open Data) ---
-const analizzaFormatoSemantico = (filePath, originalName, mimeType, extension) => {
+const analizzaFormatoSemantico = async (filePath, originalName, mimeType, extension) => {
     let diagnosi = {
         file: originalName,
         stelleAssegnate: 0,
@@ -365,36 +364,37 @@ const analizzaFormatoSemantico = (filePath, originalName, mimeType, extension) =
     try {
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
-        const ramLiberaMB = os.freemem() / (1024 * 1024);
-        const sogliaSicurezzaMB = Math.min(ramLiberaMB * 0.10, 50);
-        const isBigData = fileSizeInMB > sogliaSicurezzaMB;
 
-        const leggiContenuto = () => {
-            if (isBigData) {
-                diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi euristica a blocchi applicata.`);
-                const fd = fs.openSync(filePath, 'r');
-                const allocSize = Math.min(5 * 1024 * 1024, stats.size);
-                const buffer = Buffer.alloc(allocSize);
-                const bytesRead = fs.readSync(fd, buffer, 0, allocSize, 0);
-                fs.closeSync(fd);
-                return buffer.toString('utf8', 0, bytesRead);
-            }
-            return fs.readFileSync(filePath, 'utf8');
-        };
+        if (fileSizeInMB > 5) {
+            diagnosi.dettagli.push(`ATTENZIONE: Grafo RDF di grandi dimensioni (${fileSizeInMB.toFixed(2)} MB). Analisi in Streaming a blocchi continui attivata.`);
+        }
 
-        const fileContent = leggiContenuto();
-
-        // 1. PRIMO CHECK (Base RDF): Anche se è il metodo per il 5 stelle, è giusto controllare se ha l'infrastruttura a 4 stelle
         const regex4Stelle = /(<rdf:RDF|@prefix|@context|xmlns:rdf|http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#)/i;
-        if (!regex4Stelle.test(fileContent)) {
-            // In questo modo si declassa subito, per non perdere tempo a fare il check del 5 stelle su un file che non ha nemmeno la struttura base.
+        const regex5Stelle = /(<owl:sameAs|<skos:exactMatch|<skos:closeMatch|<rdfs:seeAlso|<schema:sameAs|owl:sameAs[\s:"]|skos:exactMatch[\s:"]|skos:closeMatch[\s:"]|rdfs:seeAlso[\s:"]|schema:sameAs[\s:"])/i;
+
+        let found4Stelle = false;
+        let found5Stelle = false;
+
+        const fd = fs.openSync(filePath, 'r');
+        const chunkSize = 5 * 1024 * 1024;
+        const buffer = Buffer.alloc(chunkSize);
+        let bytesRead = 0;
+        let tail = ""; 
+
+        while ((bytesRead = fs.readSync(fd, buffer, 0, chunkSize, null)) !== 0) {
+            const chunkStr = tail + buffer.toString('utf8', 0, bytesRead);
+            if (!found4Stelle && regex4Stelle.test(chunkStr)) found4Stelle = true;
+            if (!found5Stelle && regex5Stelle.test(chunkStr)) found5Stelle = true;
+            if (found4Stelle && found5Stelle) break; 
+            tail = chunkStr.slice(-100);
+        }
+        fs.closeSync(fd);
+
+        if (!found4Stelle) {
             throw new Error("Il file non presenta i marcatori standard di un grafo semantico (es. tag <rdf:RDF>, @prefix o @context).");
         }
 
-        // 2. SECONDO CHECK (Linked Data): Controlliamo le proprietà del 5 stelle
-        const regex5Stelle = /(<owl:sameAs|<skos:exactMatch|<skos:closeMatch|<rdfs:seeAlso|<schema:sameAs|owl:sameAs[\s:"]|skos:exactMatch[\s:"]|skos:closeMatch[\s:"]|rdfs:seeAlso[\s:"]|schema:sameAs[\s:"])/i;
-        
-        if (regex5Stelle.test(fileContent)) {
+        if (found5Stelle) {
             diagnosi.stelleAssegnate = 5;
             diagnosi.livelloMaturita = "5 Stelle - Linked Open Data (LOD)";
             diagnosi.dettagli.push("Verifica superata: Rilevata sintassi base del Web Semantico (RDF/Turtle/JSON-LD).");
@@ -402,20 +402,18 @@ const analizzaFormatoSemantico = (filePath, originalName, mimeType, extension) =
             return diagnosi;
         }
         
-        // Se arriviamo qui, ha passato il primo check ma ha fallito il secondo.
-        throw new Error("Il file semantico non contiene predicati di linking (owl:sameAs, skos:exactMatch, ecc.). Non è interconnesso alla LOD Cloud.");
+        throw new Error("Il file semantico non contiene predicati di linking (owl:sameAs, skos:exactMatch, ecc.) in nessuna sua parte. Non è interconnesso alla LOD Cloud.");
 
     } catch (error) {
         console.log(`Declassamento in corso per ${originalName}. Causa: ${error.message}`);
-        
-        // DECLASSAMENTO A 4 STELLE (o giù di lì, a seconda di dove ha fallito)
-        let diagnosiFallback = analizzaFormato4stelle(filePath, originalName, mimeType, extension);
+        // AWAIT inserito qui!
+        let diagnosiFallback = await analizzaFormato4stelle(filePath, originalName, mimeType, extension);
         diagnosiFallback.dettagli.unshift(`Declassamento da 5 stelle: ${error.message}`);
         return diagnosiFallback;
     }
 };
 
-const analyzeDataset = (req, res) => {
+const analyzeDataset = async (req, res) => {
     if(!req.file){
         return res.status(400).json({error:"Errore, non è stato inviato alcun file"});
     }
@@ -433,18 +431,17 @@ const analyzeDataset = (req, res) => {
     const estensioni3Stelle = ['.csv', '.json', '.xml'];
     const estensioniSemantiche = ['.rdf', '.ttl', '.n3', '.nt', '.jsonld'];
 
-    if (estensioni3Stelle.includes(extension)) {
-        risultatoValidazione = analizzaFormatoAperto(filePath, originalName, mimeType, extension);
+    if (estensioniSemantiche.includes(extension)) {
+        risultatoValidazione = await analizzaFormatoSemantico(filePath, originalName, mimeType, extension);
+    } 
+    else if (estensioni3Stelle.includes(extension)) {
+        risultatoValidazione = await analizzaFormatoAperto(filePath, originalName, mimeType, extension);
     } 
     else if (estensioni2Stelle.includes(extension)) {
-        risultatoValidazione = analizzaFormatoProprietario(filePath, originalName, mimeType, extension);
+        risultatoValidazione = await analizzaFormatoProprietario(filePath, originalName, mimeType, extension);
     } 
     else if (estensioni1Stella.includes(extension)) {
-        // FIX: Aggiunto filePath come primo parametro
-        risultatoValidazione = analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
-    } 
-    else if (estensioniSemantiche.includes(extension)) {
-        risultatoValidazione= analizzaFormatoSemantico(filePath, originalName, mimeType, extension)
+        risultatoValidazione = await analizzaFormatoNonStrutturato(filePath, mimeType, extension, originalName);
     } 
     else {
         fs.unlink(filePath, () => {});

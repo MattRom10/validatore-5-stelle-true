@@ -14,9 +14,12 @@
   "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.6",
+    "csv-parser": "^3.2.1",
     "express": "^5.2.1",
     "fast-xml-parser": "^5.11.2",
     "multer": "^2.4.0",
+    "sax": "^1.6.1",
+    "stream-json": "^3.7.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
