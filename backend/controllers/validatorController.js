@@ -142,7 +142,6 @@ const analizzaFormatoAperto = async (filePath, originalName, mimeType, extension
         diagnosi.dettagli.push(`Dimensione file: ${fileSizeInMB.toFixed(2)} MB. Analisi in Stream Processing attivata per la sicurezza dell'Heap.`);
 
         // --- CONTROLLO CSV A STREAMING ---
-        // --- CONTROLLO CSV A STREAMING ---
         if (extension === '.csv') {
             
             // Funzione di supporto per tentare il parsing con un separatore specifico
@@ -251,23 +250,29 @@ const analizzaFormatoAperto = async (filePath, originalName, mimeType, extension
             diagnosi.dettagli.push("Verifica superata: Struttura JSON validata con successo.");
             return diagnosi;
         }
-
         // --- CONTROLLO XML A STREAMING ---
         if (extension === '.xml') {
             await new Promise((resolve, reject) => {
                 const stream = fs.createReadStream(filePath);
                 const saxStream = sax.createStream(true); // Modalità strict
                 
+                // PATCH SALVAVITA: Insegniamo a sax come "distruggersi" per non far crashare Node 26+
+                if (typeof saxStream.destroy !== 'function') {
+                    saxStream.destroy = function() {}; 
+                }
+                
                 let hasTags = false;
                 
                 saxStream.on('opentag', (node) => {
                     hasTags = true;
                 });
+                
                 saxStream.on('error', (error) => {
-                    saxStream._parser.error = null; 
-                    saxStream.resume();
+                    stream.unpipe(saxStream); // scolleghiamo i tubi
+                    stream.destroy(); // chiudiamo il file per salvare la RAM
                     reject(new Error("Struttura XML corrotta o tag non bilanciati."));
                 });
+                
                 saxStream.on('end', () => {
                     if (!hasTags) reject(new Error("Il file XML risulta vuoto o privo di nodi gerarchici."));
                     resolve(true);
@@ -344,7 +349,8 @@ const analizzaFormato4stelle = async (filePath, originalName, mimeType, extensio
         if (extension === '.rdf' || extension === '.owl') estensioneBase = '.xml';
         if (extension === '.jsonld') estensioneBase = '.json';
 
-        // AWAIT inserito qui!!! (Questo era l'errore che faceva esplodere il codice)
+        
+        
         let diagnosiFallback = await analizzaFormatoAperto(filePath, originalName, mimeType, estensioneBase);
         diagnosiFallback.dettagli.unshift(`Declassamento dal modello a 4 stelle: ${error.message}`);
         
