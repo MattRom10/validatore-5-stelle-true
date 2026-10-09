@@ -1,57 +1,119 @@
-import { useState } from 'react'
+import React, { useState } from 'react';
+import Dropzone from './components/Dropzone';
+import './App.css';
 
 function App() {
-  const [file, setFile] = useState(null)
-  const [risultato, setRisultato] = useState(null)
+  // Aggiunto stato per memorizzare il file prima di inviarlo
+  const [fileDaAnalizzare, setFileDaAnalizzare] = useState(null);
+  
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [risultato, setRisultato] = useState(null);
+  const [errore, setErrore] = useState(null);
 
-  const gestisciFile = (event) => {
-    setFile(event.target.files[0])
-  }
+  // 1. Il Dropzone chiama questa funzione: memorizziamo solo il file, NON facciamo la fetch
+  const gestisciSelezioneFile = (file) => {
+    setFileDaAnalizzare(file);
+    setErrore(null);
+    setRisultato(null);
+  };
 
-  const analizzaDataset = async () => {
-    if (!file) {
-      alert("Seleziona prima un file!")
-      return
-    }
+  // 2. Il bottone "Analizza Dataset" chiama questa funzione: invia il file al backend
+  const avviaAnalisi = async () => {
+    if (!fileDaAnalizzare) return;
 
-    // Usiamo FormData per impacchettare il file. 
-    // "dataset" è il nome esatto che il backend (multer) si aspetta!
-    const formData = new FormData()
-    formData.append("dataset", file)
+    setIsAnalyzing(true);
+    setErrore(null);
+
+    const formData = new FormData();
+    formData.append('dataset', fileDaAnalizzare); // 'dataset' come nel backend
 
     try {
-      const response = await fetch("http://localhost:5001/api/upload", {
-        method: "POST",
+      const response = await fetch('http://localhost:5001/api/upload', {
+        method: 'POST',
         body: formData,
-      })
-      
-      const data = await response.json()
-      setRisultato(data)
-    } catch (error) {
-      console.error("Errore di connessione:", error)
-      setRisultato({ error: "Errore di connessione con il backend" })
+      });
+
+      if (!response.ok) {
+        throw new Error('Il server non ha risposto correttamente.');
+      }
+
+      const data = await response.json();
+      setRisultato(data); 
+    } catch (err) {
+      setErrore(err.message);
+    } finally {
+      setIsAnalyzing(false);
     }
-  }
+  };
+
+  // Funzione per annullare e tornare alla dropzone
+  const annullaSelezione = () => {
+    setFileDaAnalizzare(null);
+    setErrore(null);
+  };
+
+  const riavviaTutto = () => {
+    setFileDaAnalizzare(null);
+    setRisultato(null);
+    setErrore(null);
+  };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif' }}>
-      <h1>Validatore 5 Stelle LOD</h1>
-      
-      <div style={{ marginBottom: '20px' }}>
-        <input type="file" onChange={gestisciFile} />
-        <button onClick={analizzaDataset} style={{ marginLeft: '10px' }}>
-          Analizza Dati
-        </button>
-      </div>
+    <div className="app-container">
+      <h1 className="app-title">Validatore 5 Stelle LOD</h1>
 
-      {risultato && (
-        <div style={{ background: '#f4f4f4', padding: '20px', borderRadius: '8px' }}>
-          <h3>Risultato Diagnostica:</h3>
-          <pre>{JSON.stringify(risultato, null, 2)}</pre>
+      {/* STEP 1: Nessun file selezionato -> Mostra la Dropzone */}
+      {!isAnalyzing && !risultato && !fileDaAnalizzare && (
+        <Dropzone onFileSelected={gestisciSelezioneFile} errore={errore} />
+      )}
+
+      {/* STEP 2: File selezionato -> Mostra riepilogo e bottone Analizza */}
+      {!isAnalyzing && !risultato && fileDaAnalizzare && (
+        <div className="file-ready-container">
+          <h2>File pronto per l'analisi</h2>
+          <div className="file-info-box">
+            <span style={{ fontSize: '2rem' }}>📄</span>
+            <p className="file-name">{fileDaAnalizzare.name}</p>
+            <p className="file-size">{(fileDaAnalizzare.size / 1024 / 1024).toFixed(2)} MB</p>
+          </div>
+          
+          <div className="action-buttons">
+            <button className="btn-cancel" onClick={annullaSelezione}>
+              Annulla
+            </button>
+            <button className="btn-analyze" onClick={avviaAnalisi}>
+              Analizza Dataset
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: Analisi in corso -> Mostra il Loader */}
+      {isAnalyzing && (
+        <div className="loader-container">
+          <div className="spinner">⚙️</div>
+          <h2>Analisi in corso...</h2>
+          <p>Scansione semantica e strutturale in stream processing.</p>
+        </div>
+      )}
+
+      {/* STEP 4: Risultati pronti -> Mostra la Pagella */}
+      {risultato && !isAnalyzing && (
+        <div className="result-container">
+          <h2>Hai ottenuto {risultato.stelleAssegnate} Stelle!</h2>
+          
+          <pre style={{ textAlign: 'left', display: 'inline-block', backgroundColor: '#f4f4f4', padding: '15px' }}>
+            {JSON.stringify(risultato, null, 2)}
+          </pre>
+          <br />
+
+          <button className="btn-reset" onClick={riavviaTutto}>
+            Analizza un altro file
+          </button>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

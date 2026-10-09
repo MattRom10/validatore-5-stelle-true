@@ -1,0 +1,63 @@
+.dropzone-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  text-align: center;
+  font-family: sans-serif;
+}
+
+.dropzone-error {
+  color: #d9534f;
+  background-color: #fdf7f7;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #d9534f;
+}
+
+.dropzone-area {
+  background-color: #007bff;
+  color: white;
+  border: 3px dashed rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 4rem 2rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Cambia colore quando l'utente trascina il file sopra */
+.dropzone-area.active {
+  background-color: #4aa3ff;
+  border-color: white;
+}
+
+.dropzone-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.dropzone-button {
+  background-color: white;
+  color: #007bff;
+  border: none;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.dropzone-button:hover {
+  background-color: #f0f0f0;
+}
+
+.dropzone-text {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.hidden-input {
+  display: none;
+}

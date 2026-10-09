@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import './Dropzone.css';
 
 const Dropzone = ({ onFileSelected, errore }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -29,10 +30,10 @@ const Dropzone = ({ onFileSelected, errore }) => {
   };
 
   return (
-    <div className='ErroreSeSta'>
-      {/* Mostriamo l'errore sopra il box blu se presente */}
+    <div className="dropzone-container">
+      
       {errore && (
-        <div style={{ color: '#d9534f', backgroundColor: '#fdf7f7', padding: '10px', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #d9534f' }}>
+        <div className="dropzone-error">
           <strong>Errore:</strong> {errore}
         </div>
       )}
@@ -41,22 +42,24 @@ const Dropzone = ({ onFileSelected, errore }) => {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
+        className={`dropzone-area ${isDragging ? 'active' : ''}`}
       >
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📄</div>
+        <div className="dropzone-icon">📄</div>
         
-        <button className='ScegliFile'
+        <button 
           onClick={() => fileInputRef.current.click()}
+          className="dropzone-button"
         >
           SCEGLI FILE
         </button>
         
-        <p style={{ margin: 0, fontSize: '1.1rem' }}>o trascina file qui</p>
+        <p className="dropzone-text">o trascina file qui</p>
 
         <input 
           type="file" 
           ref={fileInputRef} 
           onChange={onFileSelect} 
-          style={{ display: 'none' }} 
+          className="hidden-input"
         />
       </div>
     </div>
