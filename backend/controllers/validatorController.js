@@ -139,7 +139,11 @@ const analizzaFormatoAperto = async (filePath, originalName, mimeType, extension
     try {
         const stats = fs.statSync(filePath);
         const fileSizeInMB = stats.size / (1024 * 1024);
+        if (fileSizeInMB > 10) {
         diagnosi.dettagli.push(`Dimensione file: ${fileSizeInMB.toFixed(2)} MB. Analisi in Stream Processing attivata per la sicurezza dell'Heap.`);
+        }else{
+            diagnosi.dettagli.push(`Dimensione file: ${fileSizeInMB.toFixed(2)} MB. Analisi completa in memoria.`);
+        }
 
         // --- CONTROLLO CSV A STREAMING ---
         if (extension === '.csv') {

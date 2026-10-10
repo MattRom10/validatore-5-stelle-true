@@ -8,12 +8,17 @@ const Pagella = ({ risultato, onReset }) => {
 
   // Dizionario con le spiegazioni di Tim Berners-Lee
   const descrizioniLOD = {
-    0: "Il file non è classificabile secondo gli standard aperti o presenta anomalie (es. formato errato, corruzione o spoofing).",
-    1: "Dato disponibile sul web con licenza aperta, ma in formato non strutturato (es. PDF, JPEG). È leggibile dall'uomo ma difficile da elaborare per una macchina.",
-    2: "Dato strutturato, ma in formato proprietario (es. Excel). È leggibile dalle macchine, ma vincola l'utente all'uso di software commerciali.",
-    3: "Dato strutturato in un formato aperto e non proprietario (es. CSV, JSON, XML). Qualunque software può leggerlo e analizzarlo liberamente.",
-    4: "Dato strutturato secondo gli standard del Web Semantico (RDF, Turtle). Utilizza URI per denotare le entità, rendendo i concetti univoci sul web, ma agisce come un silo chiuso.",
-    5: "Linked Open Data (LOD). Il top della maturità! Il dataset usa URI ed è interconnesso ad altri database mondiali (es. Wikidata, GeoNames) creando una rete globale di conoscenza."
+    0: "Il file non risulta classificabile secondo i parametri degli Open Data. Potrebbe presentare un formato errato, dati binari illeggibili o risultare corrotto (rilevato rischio di spoofing).",
+    
+    1: "Il dato è pubblicato sul web con licenza aperta, ma in un formato statico e non strutturato (es. PDF, JPEG, TXT). È facilmente consultabile e stampabile da un utente umano, ma non è elaborabile in modo automatico da una macchina.",
+    
+    2: "Il dato è strutturato ed elaborabile automaticamente (machine-readable), ma utilizza un formato proprietario (es. Microsoft Excel). Questo vincola l'utente all'uso di software commerciali specifici per poterlo manipolare.",
+    
+    3: "Il dato è strutturato e distribuito in un formato aperto e non proprietario (es. CSV, JSON, XML). Questo garantisce massima interoperabilità: qualunque software può leggerlo e analizzarlo liberamente senza vincoli di licenza.",
+    
+    4: "Il dato è strutturato secondo gli standard del Web Semantico (RDF, Turtle). Utilizza URI (Uniform Resource Identifier) per identificare in modo univoco i concetti sul web, ma il dataset agisce ancora come un 'silo' isolato.",
+    
+    5: "Linked Open Data (LOD). È il massimo livello di maturità semantica: il dataset utilizza URI ed è esplicitamente interconnesso ad altri database esterni (es. Wikidata, GeoNames), contribuendo a creare una rete globale di conoscenza."
   };
 
   useEffect(() => {
@@ -116,7 +121,7 @@ const Pagella = ({ risultato, onReset }) => {
       {/* SPIEGAZIONE DEL LIVELLO (Mostrata solo alla fine) */}
       {isFinishing && (
         <div className="descrizione-livello fade-in">
-          <h4>Perché ha ottenuto {risultato.stelleAssegnate} {risultato.stelleAssegnate === 1 ? 'stella' : 'stelle'}?</h4>
+          <h4>Perché il tuo dataset: {risultato.file} ha ottenuto {risultato.stelleAssegnate} {risultato.stelleAssegnate === 1 ? 'stella' : 'stelle'}?</h4>
           <p>{descrizioniLOD[risultato.stelleAssegnate]}</p>
         </div>
       )}
