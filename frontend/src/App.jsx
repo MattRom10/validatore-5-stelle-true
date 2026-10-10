@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Dropzone from './components/Dropzone';
 import './App.css';
 import Pagella from './components/Pagella';
+import Footer from './components/Footer';
 
 function App() {
   // Aggiunto stato per memorizzare il file prima di inviarlo
@@ -62,6 +63,9 @@ function App() {
   return (
     <div className="app-container">
       <h1 className="app-title">Validatore 5 Stelle LOD</h1>
+      <p>
+        <a href="https://dati.veneto.it/content/modello-5-stars" target='_blank'>Cos'è il sistema 5 stelle?</a>
+      </p>
 
       {/* STEP 1: Nessun file selezionato -> Mostra la Dropzone */}
       {!isAnalyzing && !risultato && !fileDaAnalizzare && (
@@ -95,8 +99,12 @@ function App() {
           <Pagella risultato={risultato} onReset={riavviaTutto} />
         </div>
       )}
+      <Footer />
     </div>
+     
   );
+
+ 
 }
 
 export default App;

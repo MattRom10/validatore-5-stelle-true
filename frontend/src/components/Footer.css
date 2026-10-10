@@ -1,0 +1,18 @@
+.app-footer {
+  margin-top: 4rem;
+  padding: 2rem 1rem;
+  border-top: 1px solid #eaeaea;
+  text-align: center;
+  color: #6c757d;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.footer-content p {
+  margin: 0.3rem 0;
+  font-size: 0.95rem;
+}
+
+.footer-university {
+  font-weight: 600;
+  color: #495057;
+}

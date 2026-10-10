@@ -5,6 +5,7 @@ const Pagella = ({ risultato, onReset }) => {
   const [stelleVisibili, setStelleVisibili] = useState(0);
   const [logVisibili, setLogVisibili] = useState([]);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [cheFo, setCheFo] = useState(false);
 
   // Dizionario con le spiegazioni di Tim Berners-Lee
   const descrizioniLOD = {
@@ -19,6 +20,20 @@ const Pagella = ({ risultato, onReset }) => {
     4: "Il dato è strutturato secondo gli standard del Web Semantico (RDF, Turtle). Utilizza URI (Uniform Resource Identifier) per identificare in modo univoco i concetti sul web, ma il dataset agisce ancora come un 'silo' isolato.",
     
     5: "Linked Open Data (LOD). È il massimo livello di maturità semantica: il dataset utilizza URI ed è esplicitamente interconnesso ad altri database esterni (es. Wikidata, GeoNames), contribuendo a creare una rete globale di conoscenza."
+  };
+
+  const suggerimentiLOD = {
+    0: "Assicurati di caricare un file testuale integro (come CSV o XML) o un grafo RDF valido, verificando che non sia corrotto. Il vantaggio di correggere il formato è rendere i dati quantomeno elaborabili da un computer (1-3 stelle). L'obiettivo finale di raggiungere le 5 stelle permetterà invece di inserire queste informazioni in una vera e propria rete di conoscenza globale. Per maggiori informazioni, contatta un IT specialist.",
+    
+    1: "Il tuo file è leggibile solo da esseri umani. Per salire a 2 o 3 stelle, dovresti estrarre questi dati e inserirli in una struttura tabellare (come Excel) o in un formato aperto (come CSV o JSON). Il vantaggio immediato di questo passaggio è permettere ai software di estrarre e analizzare automaticamente i tuoi dati. Il vantaggio massimo nell'andare a 5 stelle è l'interconnessione globale e la scoperta automatica da parte di altri database. Per maggiori informazioni, contatta un IT specialist.",
+    
+    2: "Il tuo dataset è strutturato, ma intrappolato in un formato proprietario. Per passare a 3 stelle ed eliminare il 'vendor lock-in', esporta semplicemente il tuo file Excel nel formato aperto CSV. Il vantaggio nell'andare a 3 stelle è la totale libertà di utilizzo senza dipendere da costosi software a pagamento. Il vantaggio finale nell'andare a 5 stelle è trasformare la tua semplice tabella in un ecosistema esplorabile da tutto il Web Semantico. Per maggiori informazioni, contatta un IT specialist.",
+    
+    3: "Ottimo lavoro! Per raggiungere le 4 stelle, devi fare il salto verso il Web Semantico convertendo il tuo CSV/XML in un grafo RDF o JSON-LD, assegnando un URI a ogni singola entità. Il vantaggio nell'andare a 4 stelle è poter identificare i concetti in modo inequivocabile su internet. Il vantaggio finale nell'andare a 5 stelle sarà collegare i tuoi concetti a vocabolari enciclopedici mondiali come DBpedia o Wikidata. Per maggiori informazioni, contatta un IT specialist.",
+    
+    4: "Ci sei quasi! Hai un grafo semantico perfetto. Per raggiungere l'eccellenza delle 5 stelle (LOD), devi inserire predicati come 'owl:sameAs' o 'skos:closeMatch' per collegare le tue entità a quelle di vocabolari esterni. Il vantaggio nell'andare a 5 stelle è rompere l'isolamento del tuo dataset, rendendolo interrogabile a livello globale e fornendo un contesto infinitamente più ricco agli utenti. Per maggiori informazioni, contatta un IT specialist.",
+    
+    5: "Hai raggiunto l'eccellenza assoluta! Il tuo dataset è un nodo attivo della Linked Open Data Cloud. I vantaggi concreti di avere 5 stelle: i tuoi dati sono ricercabili globalmente, interoperabili con intelligenze artificiali e arricchiscono il contesto delle informazioni a cui si collegano. Mantenere questo livello garantisce il massimo valore tecnologico possibile. Per maggiori informazioni, contatta un IT specialist."
   };
 
   useEffect(() => {
@@ -126,11 +141,32 @@ const Pagella = ({ risultato, onReset }) => {
         </div>
       )}
 
-      {/* BOTTONE PER RICOMINCIARE */}
+
+      {/* BOTTONE PER RICOMINCIARE E SUGGERIMENTI */}
       {isFinishing && (
-        <button className="btn-reset fade-in" onClick={onReset}>
-          Analizza un altro dataset
-        </button>
+        <div className="azioni-finali fade-in">
+          
+          <button className="btn-reset" onClick={onReset}>
+            Analizza un altro dataset
+          </button>
+
+          {/* Il finto "Link" al posto del bottone */}
+          <button 
+            className="link-consiglio" 
+            onClick={() => setCheFo(!cheFo)}
+          >
+            {cheFo ? 'Nascondi suggerimenti' : 'E adesso che faccio?'}
+          </button>
+
+          {/* Pannello a comparsa con il consiglio */}
+          {cheFo && (
+            <div className="box-consiglio slide-in-top">
+              <h4>{risultato.stelleAssegnate === 5 ? 'I vantaggi del tuo dataset:' : 'Come migliorare il tuo dataset:'}</h4>
+              <p>{suggerimentiLOD[risultato.stelleAssegnate]}</p>
+            </div>
+          )}
+
+        </div>
       )}
     </div>
   );

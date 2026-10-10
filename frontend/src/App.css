@@ -11,7 +11,12 @@
 .app-title {
   text-align: center;
   margin-top: 2rem;
-  color: #2c3e50;
+  color: #cdd8e3;
+  font-size: 2.5rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  font-family: "Irish Grover", system-ui;
+  font-weight: 700;
+  font-style: normal;
 }
 
 /* --- FASE DI CARICAMENTO --- */

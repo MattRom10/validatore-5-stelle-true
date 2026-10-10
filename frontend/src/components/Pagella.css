@@ -110,3 +110,63 @@
 }
 
 /* Colora anche il testo di maturità in base al tema
+
+/* --- ZONA AZIONI FINALI --- */
+.azioni-finali {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Stile "Link" per il pulsante */
+.link-consiglio {
+  background: none;
+  border: none;
+  color: #007bff;
+  text-decoration: underline;
+  font-size: 1.2rem; /* Più grande */
+  font-weight: 500;
+  cursor: pointer;
+  padding: 10px;
+  margin-top: 15px;
+  font-family: inherit;
+  transition: color 0.2s ease;
+}
+
+.link-consiglio:hover {
+  color: #0056b3;
+}
+
+/* Stile del box che compare sotto */
+.box-consiglio {
+  background-color: #f0f8ff; /* Azzurrino molto chiaro */
+  border-left: 4px solid #007bff;
+  padding: 1.2rem;
+  border-radius: 0 8px 8px 0;
+  text-align: left;
+  max-width: 90%;
+  margin: 1rem auto 0 auto;
+}
+
+.box-consiglio h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #0056b3;
+}
+
+.box-consiglio p {
+  margin: 0;
+  color: #444;
+  line-height: 1.5;
+}
+
+/* Animazione comparsa pannello */
+.slide-in-top {
+  animation: slideInTop 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes slideInTop {
+  from { opacity: 0; transform: translateY(-15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
