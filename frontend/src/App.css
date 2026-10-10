@@ -131,3 +131,21 @@
   background-color: #d2d6da;
 }
 
+/* --- RESPONSIVITÀ LAYOUT PRINCIPALE (MOBILE) --- */
+@media (max-width: 768px) {
+  .file-ready-container {
+    padding: 2rem 1.5rem;
+    margin: 2rem 1rem;
+  }
+
+  /* Su mobile mettiamo i pulsanti "Annulla" e "Analizza" uno sotto l'altro */
+  .action-buttons {
+    flex-direction: column-reverse; 
+    gap: 0.8rem;
+  }
+
+  .btn-analyze, .btn-cancel {
+    width: 100%;
+  }
+}
+

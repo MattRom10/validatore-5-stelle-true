@@ -170,3 +170,44 @@
   from { opacity: 0; transform: translateY(-15px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* --- RESPONSIVITÀ PAGELLA (MOBILE) --- */
+@media (max-width: 768px) {
+  .pagella-container {
+    padding: 1.5rem;
+    margin: 0 1rem;
+  }
+  
+  .stars-container {
+    height: 60px;
+    gap: 5px;
+  }
+
+  .star {
+    font-size: 3rem; /* Rimpicciolisce le stelle per farle entrare tutte */
+  }
+
+  .maturita-testo {
+    font-size: 1.1rem;
+    padding: 10px;
+  }
+
+  .log-line {
+    font-size: 0.95rem;
+  }
+
+  .box-consiglio {
+    max-width: 100%;
+    border-left: none;
+    border-top: 4px solid #007bff;
+    border-radius: 8px;
+    margin-top: 1rem;
+  }
+}
+
+/* Schermi super piccoli (es. iPhone SE) */
+@media (max-width: 480px) {
+  .star {
+    font-size: 2.2rem; 
+  }
+}

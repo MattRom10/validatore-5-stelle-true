@@ -61,3 +61,20 @@
 .hidden-input {
   display: none;
 }
+
+/* --- RESPONSIVITÀ DROPZONE (MOBILE) --- */
+@media (max-width: 768px) {
+  .dropzone-area {
+    padding: 2.5rem 1rem;
+    margin: 0 1rem;
+  }
+
+  .dropzone-icon {
+    font-size: 2.5rem;
+  }
+
+  .dropzone-button {
+    font-size: 1rem;
+    padding: 10px 20px;
+  }
+}
