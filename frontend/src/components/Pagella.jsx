@@ -6,57 +6,61 @@ const Pagella = ({ risultato, onReset }) => {
   const [logVisibili, setLogVisibili] = useState([]);
   const [isFinishing, setIsFinishing] = useState(false);
 
+  // Dizionario con le spiegazioni di Tim Berners-Lee
+  const descrizioniLOD = {
+    0: "Il file non è classificabile secondo gli standard aperti o presenta anomalie (es. formato errato, corruzione o spoofing).",
+    1: "Dato disponibile sul web con licenza aperta, ma in formato non strutturato (es. PDF, JPEG). È leggibile dall'uomo ma difficile da elaborare per una macchina.",
+    2: "Dato strutturato, ma in formato proprietario (es. Excel). È leggibile dalle macchine, ma vincola l'utente all'uso di software commerciali.",
+    3: "Dato strutturato in un formato aperto e non proprietario (es. CSV, JSON, XML). Qualunque software può leggerlo e analizzarlo liberamente.",
+    4: "Dato strutturato secondo gli standard del Web Semantico (RDF, Turtle). Utilizza URI per denotare le entità, rendendo i concetti univoci sul web, ma agisce come un silo chiuso.",
+    5: "Linked Open Data (LOD). Il top della maturità! Il dataset usa URI ed è interconnesso ad altri database mondiali (es. Wikidata, GeoNames) creando una rete globale di conoscenza."
+  };
+
   useEffect(() => {
-    //isMounted serve per evitare memory leak se l'utente chiude la pagella prima della fine dell'animazione
     let isMounted = true;
 
     const avviaAnimazione = async () => {
-      // 1. INTELLIGENZA ANIMAZIONE: Calcolo del tetto massimo di partenza
       let stellaPartenza = risultato.stelleAssegnate;
       const tuttiILog = risultato.dettagli.join(' ').toLowerCase();
 
-      // Scansioniamo in anticipo i log per capire da che piano è caduto il file
+      // Scansioniamo in anticipo i log
       if (tuttiILog.includes('declassamento da 5')) stellaPartenza = 5;
       else if (tuttiILog.includes('declassamento dal modello a 4')) stellaPartenza = 4;
       else if (tuttiILog.includes('declassamento da 3')) stellaPartenza = 3;
-      // Se è un Excel o un CSV senza errori, stellaPartenza rimane il voto finale (es. 2 o 3)
+      else if (tuttiILog.includes('declassamento da 2')) stellaPartenza = 2;
 
-      // 2. SALITA RAPIDA FINO AL TETTO CORRETTO
+      // SALITA RAPIDA
       for (let i = 1; i <= stellaPartenza; i++) {
         if (!isMounted) return;
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 200));
         setStelleVisibili(i);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 800)); // Pausa di suspense incredibile
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // 3. LETTURA LOG E DECLASSAMENTI IN TEMPO REALE (con decurtazione stelle)")
+      // LETTURA LOG E DECLASSAMENTI (Il colore cambia dinamicamente!)
       let stelleAttuali = stellaPartenza;
 
       for (let i = 0; i < risultato.dettagli.length; i++) {
         if (!isMounted) return;
         
         const rigaLog = risultato.dettagli[i];
-        const testoLog = rigaLog.toLowerCase();
-        
-        // Appare la riga di log a schermo
         setLogVisibili((prev) => [...prev, rigaLog]);
 
-        // Applichiamo la decurtazione delle stelle in sincronia con il testo
+        const testoLog = rigaLog.toLowerCase();
+        
         if (testoLog.includes('declassamento da 5')) stelleAttuali = 4;
         else if (testoLog.includes('declassamento dal modello a 4')) stelleAttuali = 3;
         else if (testoLog.includes('declassamento da 3') || testoLog.includes('declassamento da 2')) stelleAttuali = 1;
         else if (testoLog.includes('spoofing') || testoLog.includes('corruzione') || testoLog.includes('allarme')) stelleAttuali = 0;
 
         setStelleVisibili(stelleAttuali);
-
-        // Tempo di lettura per l'utente prima del log successivo
         await new Promise((resolve) => setTimeout(resolve, 1400));
       }
 
-      // 4. CONCLUSIONE
+      // CONCLUSIONE
       if (isMounted) {
-        setStelleVisibili(risultato.stelleAssegnate); // Allineamento di sicurezza
+        setStelleVisibili(risultato.stelleAssegnate);
         setIsFinishing(true);
       }
     };
@@ -69,25 +73,25 @@ const Pagella = ({ risultato, onReset }) => {
   }, [risultato]);
 
   return (
-    <div className="pagella-container">
+    <div className={"pagella-container tema-" + stelleVisibili}>
       <div className="pagella-header">
-        <h2 className="pagella-title">Valutazione Completata</h2>
+        {isFinishing && <h2 className="pagella-title">Valutazione Completata</h2>}
         <p className="pagella-file">📄 {risultato.file} ({risultato.dimensioneKB} KB)</p>
       </div>
 
-      {/* RENDERIZZAZIONE DELLE 5 STELLE */}
+      {/* RENDERIZZAZIONE DELLE 5 STELLE CON CLASSI COLORE DINAMICHE */}
       <div className="stars-container">
         {[1, 2, 3, 4, 5].map((stella) => (
           <span 
             key={stella} 
-            className={`star ${stella <= stelleVisibili ? 'filled' : 'empty'}`}
+            className={`star ${stella <= stelleVisibili ? `filled star-color-${stelleVisibili} star-pop` : 'empty'}`}
           >
             ★
           </span>
         ))}
       </div>
 
-      {/* LIVELLO DI MATURITÀ (Mostrato con un rimbalzo alla fine) */}
+      {/* LIVELLO DI MATURITÀ */}
       <div className="maturita-container">
         {isFinishing && (
           <h3 className="maturita-testo bounce-in">{risultato.livelloMaturita}</h3>
@@ -108,6 +112,14 @@ const Pagella = ({ risultato, onReset }) => {
           </div>
         ))}
       </div>
+
+      {/* SPIEGAZIONE DEL LIVELLO (Mostrata solo alla fine) */}
+      {isFinishing && (
+        <div className="descrizione-livello fade-in">
+          <h4>Perché ha ottenuto {risultato.stelleAssegnate} {risultato.stelleAssegnate === 1 ? 'stella' : 'stelle'}?</h4>
+          <p>{descrizioniLOD[risultato.stelleAssegnate]}</p>
+        </div>
+      )}
 
       {/* BOTTONE PER RICOMINCIARE */}
       {isFinishing && (

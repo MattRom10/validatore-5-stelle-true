@@ -1,15 +1,26 @@
+/* --- CONTENITORE PRINCIPALE E TEMI --- */
 .pagella-container {
   max-width: 700px;
   margin: 0 auto;
-  background-color: white;
+  background-color: white; /* Sfondo base per i temi 0-4 */
+  border: 1px solid transparent;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0,0,0,0.08);
   padding: 2.5rem;
   text-align: center;
+  /* Transizione fluida per quando cambia il tema (es. da 5 a 4 stelle) */
+  transition: background 0.6s ease, box-shadow 0.6s ease, border 0.6s ease;
+}
+
+/* Effetto Aura e Gradiente esclusivo per le 5 Stelle */
+.pagella-container.tema-5 {
+  background: linear-gradient(145deg, #ffffff 0%, #fffdf0 40%, #fff0b3 100%);
+  box-shadow: 0 15px 40px rgba(255, 215, 0, 0.25);
+  border: 1px solid #ffe680;
 }
 
 .pagella-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   border-bottom: 2px solid #f0f0f0;
   padding-bottom: 1rem;
 }
@@ -25,29 +36,61 @@
   margin: 0;
 }
 
-/* --- LE STELLE --- */
+/* --- LE STELLE ANIMATE --- */
 .stars-container {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin: 2rem 0;
+  margin: 1.5rem 0;
   height: 80px;
 }
 
 .star {
   font-size: 4.5rem;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.star.filled {
-  color: #ffd700;
-  text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
-  transform: scale(1.1);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .star.empty {
   color: #e0e0e0;
   transform: scale(0.9);
+}
+
+/* Colori semantici in base al livello */
+.star-color-0, .star-color-1 {
+  color: #333333; /* Nero/Grigio Scuro */
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.star-color-2 {
+  color: #dc3545; /* Rosso */
+  text-shadow: 0 0 10px rgba(220, 53, 69, 0.4);
+}
+
+.star-color-3 {
+  color: #007bff; /* Blu */
+  text-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+}
+
+.star-color-4 {
+  color: #28a745; /* Verde */
+  text-shadow: 0 0 12px rgba(40, 167, 69, 0.5);
+}
+
+.star-color-5 {
+  color: #ffd700; /* Oro super luminoso */
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.4);
+  transform: scale(1.15); /* Rende le 5 stelle un po' più grandi */
+}
+
+/* Animazione del Pop della stella quando si riempie */
+.star-pop {
+  animation: starPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes starPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
 }
 
 /* --- LIVELLO DI MATURITÀ --- */
@@ -58,7 +101,7 @@
 
 .maturita-testo {
   color: #007bff;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   margin: 0;
   padding: 12px;
   background-color: #e6f2ff;
@@ -66,63 +109,4 @@
   border: 1px solid #b8daff;
 }
 
-/* --- TERMINALE DEI LOG --- */
-.terminal-logs {
-  background-color: #f8f9fa;
-  border-left: 4px solid #007bff;
-  border-radius: 4px;
-  padding: 1.5rem;
-  text-align: left;
-  min-height: 120px;
-  margin-bottom: 2rem;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-}
-
-.log-line {
-  margin-bottom: 0.8rem;
-  font-size: 1.05rem;
-  display: flex;
-  align-items: flex-start;
-  line-height: 1.4;
-}
-
-.log-icon {
-  margin-right: 12px;
-}
-
-.log-error {
-  color: #d9534f;
-  font-weight: 500;
-}
-
-.log-success {
-  color: #28a745;
-}
-
-/* --- ANIMAZIONI --- */
-.slide-in {
-  animation: slideIn 0.5s ease-out forwards;
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.bounce-in {
-  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-}
-
-@keyframes bounceIn {
-  0% { opacity: 0; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-.fade-in {
-  animation: fadeIn 0.8s ease-in forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* Colora anche il testo di maturità in base al tema
