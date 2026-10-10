@@ -1,0 +1,128 @@
+.pagella-container {
+  max-width: 700px;
+  margin: 0 auto;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.pagella-header {
+  margin-bottom: 2rem;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 1rem;
+}
+
+.pagella-title {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+}
+
+.pagella-file {
+  color: #6c757d;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* --- LE STELLE --- */
+.stars-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 2rem 0;
+  height: 80px;
+}
+
+.star {
+  font-size: 4.5rem;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.star.filled {
+  color: #ffd700;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  transform: scale(1.1);
+}
+
+.star.empty {
+  color: #e0e0e0;
+  transform: scale(0.9);
+}
+
+/* --- LIVELLO DI MATURITÀ --- */
+.maturita-container {
+  min-height: 50px; 
+  margin-bottom: 1.5rem;
+}
+
+.maturita-testo {
+  color: #007bff;
+  font-size: 1.4rem;
+  margin: 0;
+  padding: 12px;
+  background-color: #e6f2ff;
+  border-radius: 8px;
+  border: 1px solid #b8daff;
+}
+
+/* --- TERMINALE DEI LOG --- */
+.terminal-logs {
+  background-color: #f8f9fa;
+  border-left: 4px solid #007bff;
+  border-radius: 4px;
+  padding: 1.5rem;
+  text-align: left;
+  min-height: 120px;
+  margin-bottom: 2rem;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.log-line {
+  margin-bottom: 0.8rem;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+
+.log-icon {
+  margin-right: 12px;
+}
+
+.log-error {
+  color: #d9534f;
+  font-weight: 500;
+}
+
+.log-success {
+  color: #28a745;
+}
+
+/* --- ANIMAZIONI --- */
+.slide-in {
+  animation: slideIn 0.5s ease-out forwards;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.fade-in {
+  animation: fadeIn 0.8s ease-in forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

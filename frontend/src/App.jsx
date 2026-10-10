@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Dropzone from './components/Dropzone';
 import './App.css';
+import Pagella from './components/Pagella';
 
 function App() {
   // Aggiunto stato per memorizzare il file prima di inviarlo
@@ -88,28 +89,10 @@ function App() {
         </div>
       )}
 
-      {/* STEP 3: Analisi in corso -> Mostra il Loader */}
-      {isAnalyzing && (
-        <div className="loader-container">
-          <div className="spinner">⚙️</div>
-          <h2>Analisi in corso...</h2>
-          <p>Scansione semantica e strutturale in stream processing.</p>
-        </div>
-      )}
-
-      {/* STEP 4: Risultati pronti -> Mostra la Pagella */}
+      {/* STEP 3: Risultati pronti -> Mostra la Pagella */}
       {risultato && !isAnalyzing && (
         <div className="result-container">
-          <h2>Hai ottenuto {risultato.stelleAssegnate} Stelle!</h2>
-          
-          <pre style={{ textAlign: 'left', display: 'inline-block', backgroundColor: '#f4f4f4', padding: '15px' }}>
-            {JSON.stringify(risultato, null, 2)}
-          </pre>
-          <br />
-
-          <button className="btn-reset" onClick={riavviaTutto}>
-            Analizza un altro file
-          </button>
+          <Pagella risultato={risultato} onReset={riavviaTutto} />
         </div>
       )}
     </div>
