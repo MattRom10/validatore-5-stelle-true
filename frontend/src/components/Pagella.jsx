@@ -52,11 +52,11 @@ const Pagella = ({ risultato, onReset }) => {
       // SALITA RAPIDA
       for (let i = 1; i <= stellaPartenza; i++) {
         if (!isMounted) return;
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolve) => setTimeout(resolve, 700));
         setStelleVisibili(i);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 900));
 
       // LETTURA LOG E DECLASSAMENTI (Il colore cambia dinamicamente!)
       let stelleAttuali = stellaPartenza;
@@ -75,7 +75,7 @@ const Pagella = ({ risultato, onReset }) => {
         else if (testoLog.includes('spoofing') || testoLog.includes('corruzione') || testoLog.includes('allarme')) stelleAttuali = 0;
 
         setStelleVisibili(stelleAttuali);
-        await new Promise((resolve) => setTimeout(resolve, 1400));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
       // CONCLUSIONE
