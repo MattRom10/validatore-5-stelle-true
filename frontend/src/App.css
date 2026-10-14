@@ -8,6 +8,20 @@
   font-style: normal;
 }
 
+/* Blocca le forzature del Tema Scuro di iOS e Android */
+:root {
+  color-scheme: light; 
+}
+
+/* Fissa i colori globali dell'app per renderli immutabili */
+body {
+  background-color: #121212; /* Modifica questo hex se usavi un grigio/nero diverso */
+  color: #ffffff;            /* Testo bianco */
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased; /* Rende il testo più leggibile sugli schermi dei telefoni */
+}
+
 .app-title {
   text-align: center;
   margin-top: 2rem;
