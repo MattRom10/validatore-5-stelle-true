@@ -30,7 +30,7 @@ function App() {
     formData.append('dataset', fileDaAnalizzare); // 'dataset' come nel backend
 
     try {
-      const response = await fetch('https://validatore-5-stelle-true.onrender.com/upload', {
+      const response = await fetch('https://validatore-5-stelle-true.onrender.com/api/upload', {
         method: 'POST',
         body: formData,
       });
