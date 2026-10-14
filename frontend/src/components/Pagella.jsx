@@ -52,11 +52,11 @@ const Pagella = ({ risultato, onReset }) => {
       // SALITA RAPIDA
       for (let i = 1; i <= stellaPartenza; i++) {
         if (!isMounted) return;
-        await new Promise((resolve) => setTimeout(resolve, 950));
+        await new Promise((resolve) => setTimeout(resolve, 700));
         setStelleVisibili(i);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await new Promise((resolve) => setTimeout(resolve, 950));
 
       // LETTURA LOG E DECLASSAMENTI (Il colore cambia dinamicamente!)
       let stelleAttuali = stellaPartenza;
