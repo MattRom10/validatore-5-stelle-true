@@ -8,6 +8,18 @@
   font-style: normal;
 }
 
+/* 1. FIX TITOLO: Dà respiro alle righe quando il testo va a capo su mobile */
+h1, h2, h3 {
+  line-height: 1.3 !important;
+}
+
+/* 2. FIX NOMI FILE LUNGHI: Forza l'andata a capo anche se la stringa non ha spazi */
+p, span, div {
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  max-width: 100%;
+}
+
 /* Blocca le forzature del Tema Scuro di iOS e Android */
 :root {
   color-scheme: light; 
